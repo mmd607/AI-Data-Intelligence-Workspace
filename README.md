@@ -68,3 +68,41 @@ This is the single, authoritative control system for the project — see
 `02_DOCS/decisions/DECISIONS_LOG.md` (ADR-R001) for the record of how an earlier draft
 foundation was reconciled into this structure. No other file or folder in this repository
 defines a competing phase roadmap or Git workflow.
+
+## Local Development
+
+Backend and frontend run as two separate local processes — no Docker is required for
+day-to-day development (Docker/Compose is finalized in Phase 08).
+
+### Backend (Python + FastAPI)
+
+```bash
+cd backend
+python -m venv .venv
+./.venv/Scripts/activate        # Windows; use `source .venv/bin/activate` on macOS/Linux
+pip install -r requirements-dev.txt
+cp .env.example .env            # optional — sane defaults work without it
+uvicorn app.main:app --reload --port 8000
+```
+
+- Health check: `http://localhost:8000/health`
+- Interactive API docs: `http://localhost:8000/docs`
+- Tests: `pytest`
+- Lint: `ruff check .`
+
+### Frontend (React + TypeScript + Vite)
+
+```bash
+cd frontend
+npm install
+cp .env.example .env.local      # optional — defaults to http://localhost:8000
+npm run dev
+```
+
+- App: `http://localhost:5173`
+- Tests: `npm run test`
+- Lint: `npm run lint`
+- Production build: `npm run build`
+
+Start the backend first (or at least before checking the frontend's connectivity badge) —
+the frontend shell displays live backend connectivity status on load.
