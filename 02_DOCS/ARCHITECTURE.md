@@ -202,6 +202,52 @@ returns a `zero_columns` critical finding without attempting further checks; a d
 metadata record whose raw file has been removed or corrupted out-of-band raises a
 structured `dataset_unreadable`/`dataset_not_found` error, never a bare 500.
 
+## Machine Learning Architecture (Phase 04)
+
+`app/ml/` is split by responsibility, mirroring `app/profiling/`'s pattern:
+
+- `errors.py` — `MLError` (same `{code, message, status_code}` shape as
+  `IngestionError`/`ProfilingError`, independent class).
+- `schemas.py` — every Pydantic request/response model. Every result explicitly separates
+  observed dataset facts, task type, selected features, preprocessing, model, metrics,
+  warnings, and limitations (this phase's Core Principle) — nothing here is or ever
+  contains AI-generated text.
+- `task_detection.py` / `task_info.py` — deterministic task-type suitability evaluation
+  (reusing Phase 03's `detect_semantic_type`) and static task-type metadata.
+- `target_validation.py` — every target-column validation rule (existence, missingness,
+  cardinality, class-imbalance warnings), each with a specific error `code`.
+- `preprocessing.py` — feature selection (excluding target-duplicates, constant columns,
+  and unsupported semantic types) and `ColumnTransformer` construction.
+- `splitting.py` — deterministic, stratified-where-appropriate train/test splitting.
+- `models.py` — the fixed baseline model registry (see ADR-013 for what's included and
+  why XGBoost isn't, ADR-004).
+- `evaluation.py` — classification/regression metrics, with an explicit
+  `unavailable_metrics` map for anything mathematically invalid to compute (multiclass
+  ROC-AUC, R² on a single-sample test set, etc.).
+- `training.py` — orchestration: validates, selects features, splits once, then fits and
+  evaluates a single model's `Pipeline`.
+- `comparison.py` — runs multiple models over the identical prepared split from
+  `training.py`, returning one full result per model with no aggregate score or declared
+  winner.
+
+**Leakage prevention is structural**, not a checklist: the split happens before any
+preprocessing exists; each model's `Pipeline` (preprocessing + estimator) is fit only on
+the training split, and prediction on the test split reuses already-fitted parameters
+(standard scikit-learn `Pipeline` semantics, not a custom mechanism). A candidate feature
+that is byte-identical to the target column is detected and excluded
+(`duplicate_of_target`) as an explicit anti-leakage check beyond what `Pipeline` alone
+would catch.
+
+**"Train" and "evaluate" are one atomic operation** (`POST .../ml/train`) rather than two
+separate stateful steps — there is no model-persistence/serving layer in this project (out
+of scope per the phase prompt), so there is nothing to evaluate later that training itself
+doesn't already produce. See ADR-013.
+
+**Model set is fixed and small** by design (`PHASE_04_ML_ENGINE/PHASE_PROMPT.md`: "Do not
+add a huge model zoo"): `LogisticRegression`/`RandomForestClassifier` for classification,
+`LinearRegression`/`Ridge`/`RandomForestRegressor` for regression. XGBoost was concretely
+benchmarked and not adopted — see ADR-004 for the real numbers.
+
 ## Data Flow & the Computed/AI-Generated Contract
 
 Flow: `upload → validate → store → profile → statistics → (optional) ML → (optional) AI

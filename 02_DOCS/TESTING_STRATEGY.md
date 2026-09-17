@@ -28,12 +28,18 @@ this document is the shared methodology and tooling behind it.
 - 🟡 ASSUMED coverage target: **≥80% line coverage** for core logic modules (`ingestion/`,
   `profiling/`, `ml/`, `ai/`); a lower bar is acceptable for thin router/glue code (`api/`)
   where the logic is exercised indirectly by integration tests. Exact numbers are finalized
-  and measured for real in Phase 08. **Actual, measured (Phase 03):** `app/profiling/` —
-  99% line coverage (`pytest --cov=app.profiling --cov-report=term-missing`); the one
-  uncovered line is a provably-unreachable defensive guard in a private helper (its only
-  caller already checks the same condition first) — left uncovered deliberately rather
-  than adding a contrived test or stripping a harmless safety check — the goal is 100%
-  coverage of the important logic paths, not meaningless coverage inflation.
+  and measured for real in Phase 08. **Actual, measured:**
+  - Phase 03 — `app/profiling/`: 99% line coverage; the one uncovered line is a
+    provably-unreachable defensive guard in a private helper (its only caller already
+    checks the same condition first) — left uncovered deliberately rather than adding a
+    contrived test or stripping a harmless safety check.
+  - Phase 04 — `app/ml/`: **100% line coverage** (`pytest --cov=app.ml
+    --cov-report=term-missing`) — every line, including edge cases like a NaN-poisoned
+    ROC-AUC input and a high-cardinality categorical warning, is exercised by a real,
+    meaningful test, not an artificially inflated one.
+  The goal throughout is 100% coverage of the important logic paths, not meaningless
+  coverage inflation — see each phase's own report for what was deliberately left
+  uncovered and why.
 - Fixture datasets (small, synthetic, engineered to have known properties — known null
   counts, known duplicates, known distributions) live under a test-fixtures directory
   (🟡 ASSUMED path: `backend/tests/fixtures/`), are checked into git (they contain no
