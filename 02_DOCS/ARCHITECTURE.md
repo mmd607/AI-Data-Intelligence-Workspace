@@ -51,8 +51,10 @@ is fashionable"). Every dependency added beyond this baseline needs its own entr
 
 | Concern | Decision | Status | Rationale |
 |---|---|---|---|
-| Uploaded dataset files | Filesystem, under a gitignored `data/uploads/` (exact path 🟡 ASSUMED, finalized Phase 02) | 🟡 ASSUMED | Simplest correct option for a local-first, single-user v1; avoids a database dependency for raw file bytes. |
-| Dataset metadata / profiling / ML results | 🟡 ASSUMED: JSON sidecar files, **not** a database, for v1 | ❓ OPEN QUESTION (Phase 02) | A database (SQLite via SQLAlchemy) is the natural next step if cross-dataset querying/filtering becomes a real requirement, but is not yet justified for a single-workspace v1. Phase 02 makes the final call. |
+| Uploaded dataset files | Filesystem, under `backend/data/uploads/<dataset_id>/original.csv` (gitignored) | ✅ CONFIRMED (Phase 02) | Simplest correct option for a local-first, single-user v1; avoids a database dependency for raw file bytes. `dataset_id` is always server-generated (never derived from the client's filename), which is what structurally prevents path traversal — see `app/ingestion/storage.py`. |
+| Dataset metadata | JSON sidecar file per dataset, `backend/data/uploads/<dataset_id>/metadata.json` — **not** a database | ✅ CONFIRMED (Phase 02) | Implemented and load-tested at "large-ish" scale (5,000 rows) in Phase 02 without issue. A directory listing + per-file JSON read is sufficient for list/get at single-workspace v1 scale. Revisit with a real ADR if cross-dataset querying/filtering becomes a genuine requirement (e.g. Phase 03+ needs to filter/sort across many datasets) — not yet justified. |
+| Max upload size | 50 MB per file (`APP_MAX_UPLOAD_SIZE_BYTES`, default `52428800`) | ✅ CONFIRMED (Phase 02) | Resolves the `02_DOCS/PRODUCT_SPEC.md` open question. Chosen to comfortably cover realistic CSV datasets for a portfolio-scale demo while staying well within "fits in memory on a single developer machine." No separate row/column ceiling is enforced in v1 — it's implicitly bounded by this byte cap plus in-memory `pandas` parsing (no streaming/chunked ingestion yet). Revisit if a real dataset hits this ceiling. |
+| Supported file type | `.csv` only for v1 (validated by extension; content is also sniffed to reject binary files disguised with a `.csv` extension) | ✅ CONFIRMED (Phase 02) | Matches `02_DOCS/PRODUCT_SPEC.md` "Input" (CSV initially); JSON/Parquet remain a documented future possibility, not built. |
 
 ### 3D Interaction & State
 
@@ -184,9 +186,10 @@ form of product principles 2 and 3.
 
 ## Performance & Scalability Notes
 
-- ❓ OPEN QUESTION — exact dataset size ceiling for v1 (rows/columns/file size). Until
-  Phase 02 sets a concrete number, the working assumption is "comfortably fits in memory on
-  a single developer machine" (🟡 ASSUMED, no streaming/chunked processing in v1).
+- ✅ CONFIRMED (Phase 02) — dataset size ceiling for v1 is the 50 MB per-file upload limit
+  (see "Data Storage" above); no separate row/column ceiling is enforced. "Comfortably fits
+  in memory on a single developer machine" (no streaming/chunked processing in v1) remains
+  the operating assumption behind that number, not a separate open question anymore.
 - The 3D Universe must maintain usability on lower-end hardware via explicit performance
   tiers and a 2D fallback — a hard requirement, detailed in `UI_UX_SPEC.md`.
 
@@ -208,8 +211,6 @@ alongside its use.
 
 ## Open Questions / Risks
 
-- ❓ Dataset size ceiling for v1.
-- ❓ Whether metadata storage needs a real database before Phase 02 closes.
 - ❓ Final AI real-provider choice (Phase 05).
 - **Risk:** visx's lower-level API may slow down Phase 03 delivery relative to a
   higher-level chart library; mitigated by the documented fallback and by acceptance
