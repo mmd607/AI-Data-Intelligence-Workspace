@@ -143,9 +143,10 @@ v1 is complete when, from a clean clone:
 
 ## Open Questions
 
-- ❓ Exact per-dataset size/row limits for v1 (Phase 02).
-- ❓ Whether a lightweight persistence layer (SQLite) is needed for metadata, or whether
-  filesystem + JSON sidecars suffice for v1 (Phase 02; see `ARCHITECTURE.md`).
+- ✅ RESOLVED (Phase 02) — per-dataset size limit is 50 MB per file, no separate row/column
+  ceiling; see `ARCHITECTURE.md` "Data Storage".
+- ✅ RESOLVED (Phase 02) — filesystem + JSON sidecars confirmed sufficient for v1, no
+  database needed; see `ARCHITECTURE.md` "Data Storage".
 - ❓ Whether XGBoost is included or scikit-learn baselines alone are sufficient (Phase 04).
 - ❓ Whether any enterprise/multi-user persona should be supported (currently out of scope).
 

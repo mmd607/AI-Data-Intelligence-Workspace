@@ -28,6 +28,14 @@ class Settings(BaseSettings):
     # Comma-separated list of allowed frontend origins for CORS during local development.
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
+    # Dataset ingestion (Phase 02). Storage layout and these limits resolve the open
+    # questions left in 02_DOCS/PRODUCT_SPEC.md and 02_DOCS/decisions/DECISIONS_LOG.md
+    # ADR-005: filesystem + JSON sidecar per dataset, no database, for v1. Relative to the
+    # backend process's working directory (i.e. `backend/data/uploads` when run the
+    # documented way from `backend/`).
+    data_dir: str = "data/uploads"
+    max_upload_size_bytes: int = 50 * 1024 * 1024  # 50 MB — see ADR-005.
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
