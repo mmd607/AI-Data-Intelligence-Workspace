@@ -138,8 +138,9 @@ including every pre-existing Phase 02/03 test, still passing).
 
 ## Git
 
-Commits (on `phase/04-ml-engine`): recorded in the completion message — hash cannot be
-self-referenced in this file within the same commit that includes it.
+Commits (on `phase/04-ml-engine`): `c89b687` — `feat(phase-04): implement baseline ML
+engine`, followed by a small commit recording this hash back into this report and
+`PROJECT_STATE.md` (unavoidable, same reason as prior phases).
 
 Remote branch: `origin/phase/04-ml-engine` — pushed and existence verified (see completion
 message).

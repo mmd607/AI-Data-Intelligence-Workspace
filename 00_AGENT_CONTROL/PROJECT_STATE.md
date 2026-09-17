@@ -84,8 +84,7 @@ Do not mark a phase complete unless its Definition of Done is satisfied.
   or AI logic introduced (verified by grep). ADR-011 added. No blockers. Full detail in
   `01_PHASES/PHASE_03_DATA_PROFILING_VISUALIZATION/PHASE_REPORT.md`. Merged into `main`
   by the human via PR #3 (`b7c4d86`) — not an agent action.
-- 2026-09-17 — PHASE 04 — COMPLETE — phase/04-ml-engine — (hash recorded in a follow-up
-  entry, same reason as prior phases) — Baseline ML engine: deterministic task-type
+- 2026-09-17 — PHASE 04 — COMPLETE — phase/04-ml-engine — c89b687 — Baseline ML engine: deterministic task-type
   detection, target validation (existence/missingness/cardinality/class-imbalance),
   leakage-safe preprocessing (ColumnTransformer, target-duplicate and constant-column
   exclusion, infinite-value cleaning), a fixed model registry
