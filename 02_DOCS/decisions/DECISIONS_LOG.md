@@ -149,33 +149,57 @@ contract (product principle 2).
 
 # ADR-004: XGBoost Inclusion
 
-**Date:** 2026-09-17
-**Status:** 🟡 ASSUMED (deferred) — final decision due Phase 04
+**Date:** 2026-09-17 (opened) / 2026-09-17 (resolved, Phase 04)
+**Status:** ✅ CONFIRMED — not adopted
 **Phase:** PHASE_04_ML_ENGINE
 
 ## Context
 The ZIP's own Phase 04 prompt says: "Prefer scikit-learn. Use XGBoost only when it
 materially adds value and is justified." Adding it means a heavier, non-sklearn-native
 dependency for a niche scikit-learn's own gradient-boosting implementations may already
-partially cover.
+partially cover. Phase 00 deferred a concrete decision to this phase.
 
 ## Decision
-Not adopted at foundation time. Phase 04 must run a concrete evaluation (accuracy delta on
-real fixture datasets vs. dependency cost) and record a final decision here.
+**Not adopted.** A real benchmark was run (not a guess): `xgboost` was temporarily
+installed and compared against the equivalent scikit-learn `RandomForest` estimator on
+`sklearn.datasets.make_classification`/`make_regression` synthetic data (2,000 samples, 20
+features, realistic noise), then uninstalled again — it is not a project dependency.
+
+**Results:**
+
+| Task | RandomForest | XGBoost | Delta |
+|---|---|---|---|
+| Classification (accuracy / F1) | 0.9025 / 0.9025 | 0.9075 / 0.9075 | +0.5pp, XGBoost slower to fit (1.88s vs 0.37s) |
+| Regression (RMSE / R²) | 78.01 / 0.805 | 61.39 / 0.879 | XGBoost notably better here, and faster to fit in this run (0.08s vs 1.71s) |
+
+The regression improvement is real and non-trivial on this synthetic benchmark. The
+classification improvement is marginal. Both results are on synthetic, medium-sized data —
+not the project's own local fixture datasets, which are far smaller (tens of rows), where
+a complex boosting model has little room to show a genuine edge over a baseline
+`RandomForest`/`Ridge`.
 
 ## Alternatives Considered
-- **Adopt now** — rejected: no evidence yet that it's needed; violates the
-  dependency-addition policy (`AGENT_MASTER_INSTRUCTIONS.md`) which requires justification,
-  not default inclusion.
-- **Never adopt** — not decided either; left genuinely open pending Phase 04 evidence.
+- **Adopt now, given the regression evidence** — rejected: the phase prompt is explicit
+  ("Do not add a huge model zoo"), the project's own datasets are small enough that the
+  observed synthetic-data advantage likely doesn't transfer, and `xgboost` is a real new
+  compiled-dependency cost (packaging, install size, a second gradient-boosting
+  implementation to maintain alongside scikit-learn's own). The bar in
+  `AGENT_MASTER_INSTRUCTIONS.md` is "materially adds value," and a marginal-to-real but
+  synthetic-only, small-dataset-irrelevant delta does not clear it convincingly enough to
+  justify the dependency now.
+- **Never evaluate it at all** — rejected: the phase's own Core Principle requires
+  "Machine learning decisions must be transparent and reproducible," and ADR-004 explicitly
+  promised a concrete evaluation, not a re-deferral.
 
 ## Consequences
-Phase 04 acceptance criteria explicitly require this decision to be finalized before the
-phase can close.
+`xgboost` is not a project dependency. The architecture (`app/ml/models.py`'s registry) is
+explicitly designed to allow additional models later without restructuring — if a real
+dataset in a later phase shows scikit-learn's baselines are insufficient, this ADR should
+be superseded with fresh evidence from that actual dataset, not synthetic data.
 
 ## Related
-`../ARCHITECTURE.md` "Stack Evaluation — Backend";
-`../../01_PHASES/PHASE_04_ML_ENGINE/PHASE_PROMPT.md`.
+`../ARCHITECTURE.md` "Stack Evaluation — Backend", "Machine Learning Architecture (Phase 04)";
+`../../01_PHASES/PHASE_04_ML_ENGINE/PHASE_REPORT.md`.
 
 ---
 
@@ -423,3 +447,77 @@ this record, not just the code.
 ## Related
 `../ARCHITECTURE.md` "Profiling Architecture (Phase 03)";
 `../../01_PHASES/PHASE_03_DATA_PROFILING_VISUALIZATION/PHASE_REPORT.md`.
+
+---
+
+# ADR-013: ML Engine Architecture — Model Set, Preprocessing, Train+Evaluate Merge
+
+**Date:** 2026-09-17
+**Status:** ✅ CONFIRMED
+**Phase:** PHASE_04_ML_ENGINE
+
+## Context
+`01_PHASES/PHASE_04_ML_ENGINE/PHASE_PROMPT.md` requires a small, transparent baseline ML
+engine with deterministic task detection, leakage-safe preprocessing, and an API exposing
+"train baseline model" and "evaluate model" as (seemingly) separate operations, alongside
+"validate target" and "compare baseline models."
+
+## Decision
+
+- **Model set (fixed, small):** `LogisticRegression` + `RandomForestClassifier` for
+  classification; `LinearRegression` + `Ridge` + `RandomForestRegressor` for regression.
+  XGBoost evaluated and not adopted (ADR-004).
+- **Preprocessing:** a single `sklearn.compose.ColumnTransformer` — numeric features get
+  median imputation + standard scaling; categorical (including boolean) features get
+  most-frequent imputation + one-hot encoding with unseen categories ignored at transform
+  time. Free-text, datetime, and semantically-unknown columns are excluded from features
+  outright (reported in `excluded_columns` with a reason), not force-encoded. This reuses
+  Phase 03's `detect_semantic_type` rather than re-implementing column-type logic.
+- **Leakage prevention, structurally enforced:** the train/test split happens once, before
+  any preprocessing is fit; each model's `Pipeline` (preprocessing + estimator) is fit only
+  on the training split, `.predict()` reuses already-fitted parameters on the test split.
+  A feature column that is an exact duplicate of the target is detected and excluded
+  (`duplicate_of_target`). Constant columns (zero variance) are excluded. Infinite values
+  are replaced with `NaN` before imputation rather than crashing the pipeline.
+- **"Train" and "evaluate" are merged into one atomic operation** (`POST .../ml/train`):
+  since this project has no model persistence/serving layer (explicitly out of scope —
+  "Do not introduce ... model serving infrastructure"), there is nothing to "evaluate"
+  later that isn't produced by training itself. A separate stateful "evaluate a previously
+  trained model" endpoint would require persisting fitted model objects between requests,
+  which is real infrastructure this phase deliberately does not build.
+- **Task-feasibility counts non-null target rows, not raw dataset rows:** a row with a
+  missing target can never be used for supervised training regardless of how many rows the
+  dataset has overall — `MIN_ROWS_FOR_TRAINING` (10) and all cardinality checks apply to
+  the *non-null* target count.
+- **Metrics use `average="weighted"`** for precision/recall/F1 uniformly across binary and
+  multiclass classification, rather than branching on `pos_label` for binary — simpler,
+  still valid, and avoids an arbitrary "positive class" assumption for arbitrary string
+  labels.
+- **ROC-AUC** is computed only for binary classification with available predicted
+  probabilities; multiclass and probability-less models report it in `unavailable_metrics`
+  with a reason, never a fabricated or misleading value.
+- **`scipy==1.14.1` pinned** alongside `scikit-learn==1.5.2`: the newest available `scipy`
+  (1.18.1) triggered a real `OptimizeWarning` from `LogisticRegression`'s lbfgs solver
+  passing a solver option newer `scipy` no longer recognizes — a genuine version-skew
+  issue, not a false positive. Pinning to a `scipy` version contemporaneous with this
+  `scikit-learn` release resolved it cleanly (verified: zero warnings under
+  `warnings.simplefilter("error")`).
+
+## Alternatives Considered
+- **A larger model zoo** (SVM, KNN, gradient boosting variants) — rejected per the phase
+  prompt's explicit "Do not add a huge model zoo."
+- **Per-model-type preprocessing** (e.g. skip scaling for tree-based models) — rejected for
+  simplicity; scaling numeric features doesn't hurt tree-based models' accuracy (they're
+  invariant to monotonic per-feature scaling), so one shared pipeline is simpler and still
+  correct for every model in the registry.
+- **A stateful train → store → evaluate-later flow** — rejected; see "Train/evaluate
+  merge" above.
+
+## Consequences
+Adding a genuinely new task-specific evaluate step later (e.g. cross-validation, a
+held-out validation set distinct from train/test) is a natural, additive extension of
+`app/ml/training.py` without needing to revisit this decision.
+
+## Related
+`../ARCHITECTURE.md` "Machine Learning Architecture (Phase 04)"; ADR-004;
+`../../01_PHASES/PHASE_04_ML_ENGINE/PHASE_REPORT.md`.

@@ -1,9 +1,9 @@
 """FastAPI application entrypoint.
 
 App wiring, CORS, logging, structured error handling, and the versioned API mount point.
-Phase 01 added the health endpoint; Phase 02 added dataset ingestion; Phase 03 adds
-profiling/quality/correlation/distribution. ML/AI are later phases' modules, mounted under
-`settings.api_prefix` as they're built.
+Phase 01 added the health endpoint; Phase 02 added dataset ingestion; Phase 03 added
+profiling/quality/correlation/distribution; Phase 04 adds the baseline ML engine. AI
+(Phase 05) is the next module to mount here.
 """
 
 import logging
@@ -12,10 +12,11 @@ from fastapi import APIRouter, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api import datasets, health, profile
+from app.api import datasets, health, ml, profile
 from app.config import get_settings
 from app.ingestion.errors import IngestionError
 from app.logging_config import configure_logging
+from app.ml.errors import MLError
 from app.profiling.errors import ProfilingError
 
 configure_logging()
@@ -35,11 +36,13 @@ app.add_middleware(
 
 app.include_router(health.router)
 
-# Versioned API surface, per `02_DOCS/ARCHITECTURE.md` "API Contract Philosophy". ML
-# (Phase 04) and AI (Phase 05) routers mount here in later phases.
+# Versioned API surface, per `02_DOCS/ARCHITECTURE.md` "API Contract Philosophy". AI
+# (Phase 05) mounts here next.
 api_v1 = APIRouter(prefix=settings.api_prefix)
 api_v1.include_router(datasets.router)
 api_v1.include_router(profile.router)
+api_v1.include_router(ml.task_types_router)
+api_v1.include_router(ml.router)
 app.include_router(api_v1)
 
 
@@ -71,6 +74,26 @@ async def profiling_error_handler(request: Request, exc: ProfilingError) -> JSON
     """
     logger.info(
         "Profiling error on %s %s: %s (%s)",
+        request.method,
+        request.url.path,
+        exc.code,
+        exc.message,
+    )
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"error": {"code": exc.code, "message": exc.message}},
+    )
+
+
+@app.exception_handler(MLError)
+async def ml_error_handler(request: Request, exc: MLError) -> JSONResponse:
+    """Structured, correctly-statused response for ML failures (invalid target, invalid
+    model for task, insufficient data, etc.) — same envelope as `IngestionError`/
+    `ProfilingError`, kept as an independent handler per
+    `02_DOCS/ARCHITECTURE.md` "Module Boundaries".
+    """
+    logger.info(
+        "ML error on %s %s: %s (%s)",
         request.method,
         request.url.path,
         exc.code,

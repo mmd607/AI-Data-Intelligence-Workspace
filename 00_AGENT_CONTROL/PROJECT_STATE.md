@@ -1,30 +1,29 @@
 # PROJECT STATE
 
-Status: COMPLETE (Phase 03)
+Status: COMPLETE (Phase 04)
 
-Current phase: PHASE_04_ML_ENGINE
+Current phase: PHASE_05_AI_ANALYTICS
 
-Last completed phase: PHASE_03_DATA_PROFILING_VISUALIZATION
+Last completed phase: PHASE_04_ML_ENGINE
 
-Current branch: phase/03-data-profiling-visualization (branched from `origin/main` at
-`cdd25f0`, the post-attribution-cleanup, Phase-02-merged baseline — `main` remains
-exclusively human-controlled; Phase 04 must branch fresh only after explicit human
-direction on the baseline to use)
+Current branch: phase/04-ml-engine (branched from `origin/main` at `b7c4d86`, the
+human-merged, Phase-03-included baseline — `main` remains exclusively human-controlled;
+Phase 05 must branch fresh only after explicit human direction on the baseline to use)
 
 Next action:
-STOP. Phase 03 is complete, committed, and pushed to
-`origin/phase/03-data-profiling-visualization`. Do not start Phase 04 automatically — wait
-for explicit human approval, then read `01_PHASES/PHASE_04_ML_ENGINE/PHASE_PROMPT.md` and
-follow the same lifecycle (DISCOVER → PLAN → IMPLEMENT → TEST → REVIEW → DOCUMENT →
-UPDATE STATE → COMMIT → PUSH → VERIFY → STOP) on a fresh branch per `GIT_WORKFLOW.md`.
-`main` is never touched, never committed to, never merged into, by the agent.
+STOP. Phase 04 is complete, committed, and pushed to `origin/phase/04-ml-engine`. Do not
+start Phase 05 automatically — wait for explicit human approval, then read
+`01_PHASES/PHASE_05_AI_ANALYTICS/PHASE_PROMPT.md` and follow the same lifecycle
+(DISCOVER → PLAN → IMPLEMENT → TEST → REVIEW → DOCUMENT → UPDATE STATE → COMMIT → PUSH →
+VERIFY → STOP) on a fresh branch per `GIT_WORKFLOW.md`. `main` is never touched, never
+committed to, never merged into, by the agent.
 
 ## Phase status
 
 - [x] PHASE 01 — Foundation
 - [x] PHASE 02 — Data Ingestion
 - [x] PHASE 03 — Data Profiling & Visualization
-- [ ] PHASE 04 — ML Engine
+- [x] PHASE 04 — ML Engine
 - [ ] PHASE 05 — AI Analytics
 - [ ] PHASE 06 — API + Frontend Integration
 - [ ] PHASE 07 — 3D Universe UI
@@ -83,4 +82,19 @@ Do not mark a phase complete unless its Definition of Done is satisfied.
   `/api/v1/datasets/{id}/*` endpoints. 138/138 tests passing (96 new), 99% coverage on
   `app/profiling/`, Ruff-clean, verified end-to-end against a real running server. No ML
   or AI logic introduced (verified by grep). ADR-011 added. No blockers. Full detail in
-  `01_PHASES/PHASE_03_DATA_PROFILING_VISUALIZATION/PHASE_REPORT.md`.
+  `01_PHASES/PHASE_03_DATA_PROFILING_VISUALIZATION/PHASE_REPORT.md`. Merged into `main`
+  by the human via PR #3 (`b7c4d86`) — not an agent action.
+- 2026-09-17 — PHASE 04 — COMPLETE — phase/04-ml-engine — (hash recorded in a follow-up
+  entry, same reason as prior phases) — Baseline ML engine: deterministic task-type
+  detection, target validation (existence/missingness/cardinality/class-imbalance),
+  leakage-safe preprocessing (ColumnTransformer, target-duplicate and constant-column
+  exclusion, infinite-value cleaning), a fixed model registry
+  (LogisticRegression/RandomForestClassifier, LinearRegression/Ridge/
+  RandomForestRegressor), deterministic stratified train/test splitting, classification
+  and regression evaluation with explicit unavailable-metric reporting, and multi-model
+  comparison with no aggregate score/winner — exposed via 4 new
+  `/api/v1/ml/*`/`/api/v1/datasets/{id}/ml/*` endpoints. 233/233 tests passing (92 new),
+  100% coverage on `app/ml/`, Ruff-clean, verified end-to-end (including live determinism)
+  against a real running server. XGBoost concretely benchmarked and not adopted (ADR-004
+  finalized); ADR-013 added. No Phase 02/03 regression. No blockers. Full detail in
+  `01_PHASES/PHASE_04_ML_ENGINE/PHASE_REPORT.md`.
