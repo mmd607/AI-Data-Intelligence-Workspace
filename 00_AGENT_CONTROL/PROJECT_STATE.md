@@ -57,8 +57,7 @@ Do not mark a phase complete unless its Definition of Done is satisfied.
   already the case for every commit made so far), no agent/bot `Co-Authored-By` trailers
   going forward, `main` is exclusively human-controlled (agent never commits/pushes/merges
   into it, never force-pushes any shared branch). Applied from this point forward.
-- 2026-09-17 — PHASE 02 — COMPLETE — phase/02-data-ingestion — (hash recorded in a
-  follow-up entry, same reason as Phase 01) — Dataset ingestion: `POST/GET
+- 2026-09-17 — PHASE 02 — COMPLETE — phase/02-data-ingestion — 33f1981 — Dataset ingestion: `POST/GET
   /api/v1/datasets`, `GET /api/v1/datasets/{id}`; CSV parsing via pandas (row/column
   counts, dtypes, missing-value count, duplicate-row count); filesystem + JSON-sidecar
   storage with server-generated dataset ids (structural path-traversal defense); 50 MB
