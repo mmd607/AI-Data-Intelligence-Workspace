@@ -181,26 +181,36 @@ phase can close.
 
 # ADR-005: Dataset & Metadata Storage
 
-**Date:** 2026-09-17
-**Status:** ❓ OPEN QUESTION — final decision due Phase 02
+**Date:** 2026-09-17 (opened) / 2026-09-17 (resolved, Phase 02)
+**Status:** ✅ CONFIRMED
 **Phase:** PHASE_02_DATA_INGESTION
 
 ## Context
-v1 is single-user, local-first. Uploaded files need storage; profiling/ML results need
+v1 is single-user, local-first. Uploaded files need storage; ingestion metadata needs
 somewhere to live too.
 
-## Decision (working assumption only)
-Raw files on the filesystem (`data/uploads/`, gitignored); metadata/results as JSON sidecar
-files, not a database, for v1.
+## Decision
+Raw files on the filesystem, under `backend/data/uploads/<dataset_id>/original.csv`
+(gitignored); metadata as a JSON sidecar file, `backend/data/uploads/<dataset_id>/
+metadata.json` — not a database, for v1. `dataset_id` is always server-generated (a
+`uuid4`), never derived from the client's filename — this is the structural mechanism that
+prevents path traversal, not a validation rule alone (`backend/app/ingestion/storage.py`).
+Confirmed working at "large-ish" scale (5,000-row fixture) with no issues in Phase 02's
+test suite.
 
 ## Alternatives Considered
 - **SQLite via SQLAlchemy** — the natural next step if cross-dataset querying/filtering
-  becomes a real requirement; not yet justified for a single-workspace v1.
+  becomes a real requirement; a plain directory listing + per-file JSON read was
+  sufficient for Phase 02's list/get endpoints at v1 scale, so this wasn't justified yet.
 
 ## Consequences
-If Phase 02 finds the sidecar-file approach insufficient (e.g. for concurrent read/write
-safety, or listing/filtering performance), this ADR is superseded by a new one adopting
-SQLite, and `ARCHITECTURE.md` is updated accordingly.
+If a later phase (e.g. Phase 03's profiling results needing efficient cross-dataset
+querying) finds the sidecar-file approach insufficient, this ADR is superseded by a new
+one adopting SQLite, and `ARCHITECTURE.md` is updated accordingly — not silently changed
+in place.
+
+## Related
+`../ARCHITECTURE.md` "Data Storage"; `01_PHASES/PHASE_02_DATA_INGESTION/PHASE_REPORT.md`.
 
 ## Related
 `../ARCHITECTURE.md` "Data Storage";
@@ -316,4 +326,43 @@ None beyond the standard Docker/CI maintenance surface.
 ## Related
 `../ARCHITECTURE.md` "Infrastructure";
 `../../01_PHASES/PHASE_01_FOUNDATION/PHASE_PROMPT.md`;
+`../../01_PHASES/PHASE_08_TESTING_DOCKER_DEPLOYMENT/PHASE_PROMPT.md`.
+
+---
+
+# ADR-010: Upload Size Limit & Supported File Type
+
+**Date:** 2026-09-17
+**Status:** ✅ CONFIRMED
+**Phase:** PHASE_02_DATA_INGESTION
+
+## Context
+`PRODUCT_SPEC.md` left the exact per-dataset size limit as an open question. Ingestion
+needs a concrete, enforced number, not an indefinite "fits in memory."
+
+## Decision
+50 MB per uploaded file (`APP_MAX_UPLOAD_SIZE_BYTES`, default `52428800`), enforced after
+reading the file into memory (not a streaming/early-reject check — see "Consequences"). No
+separate row/column ceiling. Only `.csv` is accepted in v1, validated by extension plus a
+lightweight binary-content sniff (reject files that are mostly non-printable bytes or
+contain NUL bytes, even if named `.csv`) — a dependency-free mitigation for MIME/type
+spoofing, per `02_DOCS/ARCHITECTURE.md` "Security & Privacy".
+
+## Alternatives Considered
+- **Streaming size rejection** (reject based on `Content-Length` before buffering the full
+  body) — more robust against a genuinely hostile oversized upload, but adds complexity
+  not justified for Phase 02; **explicitly deferred to Phase 08** ("Testing, Security &
+  Reliability" hardening), not silently skipped.
+- **A real content-type sniffing library** (e.g. `python-magic`) — rejected for now to
+  avoid an extra dependency for a problem the printable-character heuristic already
+  handles adequately at this phase.
+
+## Consequences
+An attacker could still send a request with a large `Content-Length` and force the server
+to buffer up to just under the limit before rejection, consuming memory briefly — an
+accepted, documented risk for a local-first v1, to be hardened in Phase 08.
+
+## Related
+`../ARCHITECTURE.md` "Data Storage"; `../PRODUCT_SPEC.md` "Open Questions";
+`../../01_PHASES/PHASE_02_DATA_INGESTION/PHASE_REPORT.md`;
 `../../01_PHASES/PHASE_08_TESTING_DOCKER_DEPLOYMENT/PHASE_PROMPT.md`.
