@@ -1,19 +1,19 @@
 # PROJECT STATE
 
-Status: COMPLETE (Phase 04)
+Status: COMPLETE (Phase 05)
 
-Current phase: PHASE_05_AI_ANALYTICS
+Current phase: PHASE_06_API_FRONTEND_INTEGRATION
 
-Last completed phase: PHASE_04_ML_ENGINE
+Last completed phase: PHASE_05_AI_ANALYTICS
 
-Current branch: phase/04-ml-engine (branched from `origin/main` at `b7c4d86`, the
-human-merged, Phase-03-included baseline — `main` remains exclusively human-controlled;
-Phase 05 must branch fresh only after explicit human direction on the baseline to use)
+Current branch: phase/05-ai-analytics (branched from `origin/main` at `48a1de5`, the
+human-merged, Phase-04-included baseline — `main` remains exclusively human-controlled;
+Phase 06 must branch fresh only after explicit human direction on the baseline to use)
 
 Next action:
-STOP. Phase 04 is complete, committed, and pushed to `origin/phase/04-ml-engine`. Do not
-start Phase 05 automatically — wait for explicit human approval, then read
-`01_PHASES/PHASE_05_AI_ANALYTICS/PHASE_PROMPT.md` and follow the same lifecycle
+STOP. Phase 05 is complete, committed, and pushed to `origin/phase/05-ai-analytics`. Do not
+start Phase 06 automatically — wait for explicit human approval, then read
+`01_PHASES/PHASE_06_API_FRONTEND_INTEGRATION/PHASE_PROMPT.md` and follow the same lifecycle
 (DISCOVER → PLAN → IMPLEMENT → TEST → REVIEW → DOCUMENT → UPDATE STATE → COMMIT → PUSH →
 VERIFY → STOP) on a fresh branch per `GIT_WORKFLOW.md`. `main` is never touched, never
 committed to, never merged into, by the agent.
@@ -24,7 +24,7 @@ committed to, never merged into, by the agent.
 - [x] PHASE 02 — Data Ingestion
 - [x] PHASE 03 — Data Profiling & Visualization
 - [x] PHASE 04 — ML Engine
-- [ ] PHASE 05 — AI Analytics
+- [x] PHASE 05 — AI Analytics
 - [ ] PHASE 06 — API + Frontend Integration
 - [ ] PHASE 07 — 3D Universe UI
 - [ ] PHASE 08 — Testing + Docker + Deployment
@@ -97,3 +97,20 @@ Do not mark a phase complete unless its Definition of Done is satisfied.
   against a real running server. XGBoost concretely benchmarked and not adopted (ADR-004
   finalized); ADR-013 added. No Phase 02/03 regression. No blockers. Full detail in
   `01_PHASES/PHASE_04_ML_ENGINE/PHASE_REPORT.md`.
+- 2026-09-18 — PHASE 05 — COMPLETE — phase/05-ai-analytics — TBD (recorded in a follow-up
+  commit) — Grounded AI analytics layer: provider abstraction (`offline` default /
+  `anthropic` opt-in via direct `httpx` calls, no SDK / `disabled`, no silent fallback
+  between them), 5 AI capabilities (dataset summary, quality explanation, column insight,
+  correlation explanation, ML explanation), grounded natural-language Q&A with
+  deterministic-first question routing, prompt-injection defense (structural
+  evidence-as-untrusted-data separation plus explicit system instructions), and the
+  mandatory grounding-guarantee test suite proving a fabricating provider can never alter
+  a response's `computed` field — exposed via 3 new
+  `/api/v1/ai/status`/`/api/v1/datasets/{id}/ai/{analyze,query}` endpoints. 342/342 tests
+  passing (109 new), 100% coverage on `app/ai/` (one documented, provably-unreachable
+  defensive line excepted), Ruff-clean, verified end-to-end (all 5 capabilities, both
+  query categories, all documented error paths, OpenAPI schema, no Phase 02/03/04
+  regression) against a real running server. A real routing bug (naive substring column
+  matching, e.g. "age" inside "average") was found and fixed by this phase's own tests.
+  ADR-014 added. No blockers. Full detail in
+  `01_PHASES/PHASE_05_AI_ANALYTICS/PHASE_REPORT.md`.

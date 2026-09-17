@@ -8,6 +8,7 @@ local `.env` file, never committed — see `.env.example`), never hardcoded, per
 
 from functools import lru_cache
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -35,6 +36,16 @@ class Settings(BaseSettings):
     # documented way from `backend/`).
     data_dir: str = "data/uploads"
     max_upload_size_bytes: int = 50 * 1024 * 1024  # 50 MB — see ADR-005.
+
+    # AI analytics (Phase 05) — see 02_DOCS/decisions/DECISIONS_LOG.md ADR-014. Default
+    # "offline" satisfies principle 4 (useful with zero configuration, no network, no
+    # key). "disabled" turns the AI layer off entirely. "anthropic" is the one real
+    # provider implemented; the interface itself is provider-agnostic.
+    ai_provider: str = "offline"  # "offline" | "anthropic" | "disabled"
+    ai_model: str = ""
+    ai_api_key: SecretStr | None = None  # never logged, never echoed in any response
+    ai_base_url: str = "https://api.anthropic.com"
+    ai_timeout_seconds: float = 30.0
 
     @property
     def cors_origin_list(self) -> list[str]:

@@ -521,3 +521,93 @@ held-out validation set distinct from train/test) is a natural, additive extensi
 ## Related
 `../ARCHITECTURE.md` "Machine Learning Architecture (Phase 04)"; ADR-004;
 `../../01_PHASES/PHASE_04_ML_ENGINE/PHASE_REPORT.md`.
+
+---
+
+# ADR-014: AI Provider Abstraction, Grounding Guarantee, No-Silent-Fallback
+
+**Date:** 2026-09-18
+**Status:** ✅ CONFIRMED
+**Phase:** PHASE_05_AI_ANALYTICS
+
+## Context
+`01_PHASES/PHASE_05_AI_ANALYTICS/PHASE_PROMPT.md` requires an optional AI layer that can
+never invent dataset facts, must not hard-code to one AI vendor, must degrade gracefully
+with zero configuration, and must defend against prompt injection from dataset content.
+`ARCHITECTURE.md`'s pre-existing "AI Mode Abstraction" section had already committed to a
+provider-style interface with an offline default; this phase had to pick and implement the
+real provider, and design the mechanism that makes the "never invent a fact" requirement
+an enforced guarantee rather than a prompting convention.
+
+## Decision
+
+- **Provider interface (`app/ai/provider.py`):** an `AIProvider` ABC with `is_available()`
+  and `generate(system_instructions, evidence, user_request) -> ProviderResult`. A provider
+  receives only the already-built, size-bounded evidence dict — never raw dataset rows,
+  never application configuration/secrets — and returns narrative text only.
+- **Two providers, selected by `APP_AI_PROVIDER` (`offline` default / `anthropic` /
+  `disabled`), no silent fallback:** if `anthropic` is configured without an API key, the
+  factory still returns an `AnthropicProvider` instance whose own `is_available()` reports
+  the misconfiguration honestly — it never silently substitutes `OfflineProvider`. Silent
+  fallback would make a broken configuration look like a working one.
+- **Real provider = Anthropic's Messages API via direct `httpx.post`, not an SDK:** per the
+  phase prompt's "Dependency Discipline" ("Do not add a large AI framework merely for
+  convenience"). `httpx` is already a project dependency (the FastAPI test client has used
+  it since Phase 01); a single REST endpoint needs nothing more. Every failure mode
+  (timeout, network error, 401, 429, other 4xx/5xx, malformed JSON body) is caught and
+  re-raised as a structured `AIError`, never a raw `httpx` exception reaching the API layer.
+- **The Grounding Guarantee, enforced structurally:** `computed` is built from deterministic
+  evidence (`evidence.py`, reusing Phase 02-04's own already-computed output) *before*
+  `provider.generate()` is ever called, and is returned unmodified afterward. A provider has
+  no parameter or return path that could alter it — only `ai_explanation.text` reflects
+  whatever the provider produced. Proven, not just asserted: `tests/test_ai_grounding.py`
+  uses a `FakeProvider` that returns deliberately fabricated/wrong text (wrong row count,
+  wrong mean, wrong correlation, wrong ML metric, wrong duplicate count) and asserts
+  `computed` is exactly correct in every case regardless.
+- **Deterministic-first question routing (`routing.py`):** a fixed set of recognized
+  question patterns resolve directly from Phase 02-04 output before any provider is
+  consulted, rather than asking an LLM to compute a number it could get wrong. Column-name
+  matching uses word-boundary regex (`\bcolumn_name\b`), not a substring check — a real bug
+  caught during this phase's own testing: a naive substring check let "age" match inside
+  "average", producing a false-positive resolved answer for a question about a
+  nonexistent column.
+- **Prompt injection defense is structural, not just instructional:** evidence is always
+  wrapped as a clearly delimited, explicitly-labeled "untrusted data" JSON block
+  (`security.py`'s `build_user_prompt`), with system instructions establishing that
+  hierarchy for the real provider. The offline provider is additionally immune by
+  construction — it only ever substitutes named fields into fixed templates, with no
+  "interpretation" step where a string could be mistaken for an instruction.
+- **Data minimization:** evidence size is capped (`MAX_SUMMARY_COLUMNS=30`,
+  `MAX_QUALITY_FINDINGS=20`, `MAX_CORRELATION_PAIRS=10`, plus Phase 03's existing ≤5 sample
+  values) — raw dataset rows are never sent to any provider.
+- **Secret handling:** the API key is a Pydantic `SecretStr` on `Settings`, used only in the
+  `x-api-key` HTTP header — never in a request body, never logged, and no response schema
+  has a field that could echo it back.
+
+## Alternatives Considered
+- **A single hard-coded Anthropic integration with no abstraction** — rejected; the phase
+  prompt explicitly requires vendor-agnosticism, and the offline provider (required outright
+  for principle 4) already forces an interface to exist regardless.
+- **Silently falling back to the offline provider when `anthropic` is misconfigured** —
+  rejected; this would hide a configuration error behind output that looks identical to a
+  deliberately offline-mode response, making misconfiguration invisible.
+- **An official Anthropic SDK dependency** — rejected per "Dependency Discipline"; a single
+  REST endpoint over already-present `httpx` is simpler and has one fewer dependency to
+  track.
+- **Prompting alone as the grounding mechanism** ("tell the model not to invent numbers") —
+  rejected as the *sole* mechanism; kept as a defense-in-depth layer (`SYSTEM_INSTRUCTIONS`)
+  but not relied upon, since an LLM's own text has no way to reach or alter `computed`
+  regardless of what it says.
+
+## Consequences
+Adding a third provider (a different vendor, or a local model) is a natural, additive
+extension: implement `AIProvider`, add a branch in `factory.py`, no change to `service.py`,
+`evidence.py`, or the grounding mechanism. The grounding guarantee is a property of the
+architecture (evidence built before the provider is called, provider returns text only),
+not of any individual provider's behavior — so it holds automatically for any future
+provider without additional enforcement code.
+
+## Related
+`../ARCHITECTURE.md` "AI Analytics Architecture (Phase 05)", "The Grounding Guarantee";
+`../../01_PHASES/PHASE_05_AI_ANALYTICS/PHASE_REPORT.md`; `tests/test_ai_grounding.py`;
+`tests/test_ai_security.py`.

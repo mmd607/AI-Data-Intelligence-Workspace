@@ -2,8 +2,8 @@
 
 App wiring, CORS, logging, structured error handling, and the versioned API mount point.
 Phase 01 added the health endpoint; Phase 02 added dataset ingestion; Phase 03 added
-profiling/quality/correlation/distribution; Phase 04 adds the baseline ML engine. AI
-(Phase 05) is the next module to mount here.
+profiling/quality/correlation/distribution; Phase 04 added the baseline ML engine; Phase
+05 adds the optional, grounded AI analytics layer.
 """
 
 import logging
@@ -12,7 +12,8 @@ from fastapi import APIRouter, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api import datasets, health, ml, profile
+from app.ai.errors import AIError
+from app.api import ai, datasets, health, ml, profile
 from app.config import get_settings
 from app.ingestion.errors import IngestionError
 from app.logging_config import configure_logging
@@ -36,13 +37,14 @@ app.add_middleware(
 
 app.include_router(health.router)
 
-# Versioned API surface, per `02_DOCS/ARCHITECTURE.md` "API Contract Philosophy". AI
-# (Phase 05) mounts here next.
+# Versioned API surface, per `02_DOCS/ARCHITECTURE.md` "API Contract Philosophy".
 api_v1 = APIRouter(prefix=settings.api_prefix)
 api_v1.include_router(datasets.router)
 api_v1.include_router(profile.router)
 api_v1.include_router(ml.task_types_router)
 api_v1.include_router(ml.router)
+api_v1.include_router(ai.status_router)
+api_v1.include_router(ai.router)
 app.include_router(api_v1)
 
 
@@ -94,6 +96,28 @@ async def ml_error_handler(request: Request, exc: MLError) -> JSONResponse:
     """
     logger.info(
         "ML error on %s %s: %s (%s)",
+        request.method,
+        request.url.path,
+        exc.code,
+        exc.message,
+    )
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"error": {"code": exc.code, "message": exc.message}},
+    )
+
+
+@app.exception_handler(AIError)
+async def ai_error_handler(request: Request, exc: AIError) -> JSONResponse:
+    """Structured, correctly-statused response for AI-layer failures (bad request shape,
+    e.g. a missing 'ml_result' or unknown column) — same envelope as the other modules'
+    handlers, kept independent per `02_DOCS/ARCHITECTURE.md` "Module Boundaries". Provider
+    *runtime* failures (timeout, network error, misconfiguration) never reach here — they
+    are caught inside `app.ai.service` and returned as `available: false` with a reason,
+    per `01_PHASES/PHASE_05_AI_ANALYTICS/PHASE_PROMPT.md` section 19.
+    """
+    logger.info(
+        "AI error on %s %s: %s (%s)",
         request.method,
         request.url.path,
         exc.code,
