@@ -115,9 +115,9 @@ added), `00_AGENT_CONTROL/PROJECT_STATE.md`.
 
 ## Git
 
-Commits (on `phase/02-data-ingestion`): see the completion message for hashes — recorded
-there rather than here for the same reason as Phase 01 (a commit's own hash cannot be
-known and written into a file included in that commit).
+Commits (on `phase/02-data-ingestion`): `33f1981` — `feat: Phase 02 dataset ingestion
+(backend)`, followed by a small commit recording this hash back into this report and
+`PROJECT_STATE.md` (unavoidable, same reason as Phase 01).
 
 Remote branch: `origin/phase/02-data-ingestion` — pushed and existence verified (see
 completion message).
