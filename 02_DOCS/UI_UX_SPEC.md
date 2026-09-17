@@ -57,8 +57,9 @@ acceptance):
 - **Fallback 2D "List/Table" view:** the same information architecture as the Universe,
   presented as a plain table + detail panel, for accessibility, low-end hardware, and
   no-WebGL environments (§4.7). This is **not optional** — it must reach full feature parity
-  for data access; only the spatial/navigational metaphor is lost. This is the view Phase 06
-  (API + Frontend Integration) builds first; Phase 07 adds the 3D layer on top/in front of it.
+  for data access; only the spatial/navigational metaphor is lost. ✅ BUILT (Phase 06) —
+  `frontend/src/features/`, real backend data throughout the upload → overview → quality →
+  analytics → ML → AI flow; Phase 07 adds the 3D layer on top/in front of it.
 
 ## 4. The Data Intelligence Universe
 
@@ -172,11 +173,12 @@ and small touchscreens. Finalized in Phase 07.
 ## 7. Component Inventory (2D chrome)
 
 Standard components needed across phases (buttons, cards, tables, upload dropzone, modals,
-toasts, tabs, form inputs). 🟡 ASSUMED to be hand-built with Tailwind utility classes plus
-the design-token system, not a third-party component library — consistent with the "not
-generic dashboard" requirement, since most off-the-shelf component libraries carry a
-recognizable default look. Finalized as a concrete token/component file at the start of
-Phase 06.
+toasts, tabs, form inputs). ✅ CONFIRMED (Phase 06) — hand-built with Tailwind utility
+classes, not a third-party component library, consistent with the "not generic dashboard"
+requirement. `frontend/src/components/` (`Card`, `Badge`, `StatValue`, `Tabs`,
+`LoadingSkeleton`/`ErrorState`/`EmptyState`) covers what Phase 06 needed; modals/toasts
+were not required by this phase's flow and remain unbuilt until a concrete need exists.
+Full design-token finalization (exact palette/typography) remains Phase 07's job per §9.
 
 ## 8. States & Empty/Error/Loading Design Requirements
 

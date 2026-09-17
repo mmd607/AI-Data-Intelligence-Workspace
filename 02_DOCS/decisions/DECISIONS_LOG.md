@@ -611,3 +611,87 @@ provider without additional enforcement code.
 `../ARCHITECTURE.md` "AI Analytics Architecture (Phase 05)", "The Grounding Guarantee";
 `../../01_PHASES/PHASE_05_AI_ANALYTICS/PHASE_REPORT.md`; `tests/test_ai_grounding.py`;
 `tests/test_ai_security.py`.
+
+---
+
+# ADR-015: Frontend Integration Architecture — Routing, Charts, State
+
+**Date:** 2026-09-18
+**Status:** ✅ CONFIRMED
+**Phase:** PHASE_06_API_FRONTEND_INTEGRATION
+
+## Context
+`01_PHASES/PHASE_06_API_FRONTEND_INTEGRATION/PHASE_PROMPT.md` requires wiring the full
+Phase 02-05 backend into a real 2D application (route structure, typed API client,
+loading/error/empty states, caching/state strategy "where justified") while
+`00_AGENT_CONTROL/AGENT_MASTER_INSTRUCTIONS.md`'s dependency-addition policy requires a
+recorded reason for every new dependency. `ARCHITECTURE.md`'s Phase 00 stack evaluation
+had left the frontend data-visualization library as 🟡 ASSUMED (**visx**), "revisit in
+Phase 03" — Phase 03 was backend-only (no frontend chart work happened then, per its own
+phase boundary), so that decision was actually still open going into this phase.
+
+## Decision
+
+- **Routing: `react-router-dom` (v7, declarative API only — `BrowserRouter`/`Routes`/
+  `Route`/`NavLink`/`useParams`/`useOutletContext`).** The standard, well-supported choice
+  for a React SPA; the phase prompt explicitly asks for a real route structure (landing →
+  dataset workspace → per-capability tabs) and the project had no routing library yet. Its
+  newer data-router/loader API was deliberately not adopted — the phase prompt also says
+  "do not over-engineer routing," and every data need here is already served by the
+  existing typed API client plus `useAsync`/`useLazyAsync` hooks (below).
+- **Charts: hand-rolled SVG components (`frontend/src/viz/`), no charting dependency.**
+  Supersedes the Phase 00 visx assumption. Every chart this phase needs — a fixed-bin
+  histogram, a single correlation-magnitude bar, a categorical frequency list — is a small,
+  fixed shape driven entirely by data the backend already bins/computes (`numpy.histogram`
+  server-side, Pearson coefficients server-side). A general-purpose charting library's
+  value is in handling chart types, scales, and interactions this project doesn't need yet;
+  paying that dependency cost now, before Phase 07's real visual-identity pass, isn't
+  justified. Revisit if Phase 07 needs chart types this approach can't reasonably cover.
+- **State: no state-management library.** Server data is fetched via two small hooks
+  (`useAsync` for mount-time loads, `useLazyAsync` for user-triggered actions) that wrap
+  the typed API client — not a query/cache library (e.g. TanStack Query). The one piece of
+  genuine client-only state (the last trained `ModelResult`, needed by the AI
+  `ml_explanation` capability since the backend has no model-persistence layer, ADR-013)
+  lives in a single small React Context (`state/DatasetSessionContext.tsx`), scoped to one
+  dataset's workspace. This matches the phase prompt's own "use the simplest appropriate
+  state architecture" instruction — there is no cross-dataset shared cache, background
+  refetching, or optimistic-update requirement that would justify a dedicated library.
+- **API client stays hand-written TypeScript, not OpenAPI-codegen.** `types.ts` mirrors the
+  backend's actual Pydantic schemas field-for-field (verified against the schema source
+  files directly, not guessed), organized as one interface per response model plus
+  capability-specific "evidence" interfaces for the AI layer's `computed` field (which is
+  intentionally an open dict server-side, since it varies per AI capability — see
+  `backend/app/ai/evidence.py`). A codegen tool was considered but rejected for this phase:
+  it would add a devDependency and a generated-file question (checked in vs. build step)
+  for a schema surface that's small enough to keep in sync by hand, verified against a real
+  running backend as part of this phase's own runtime verification.
+
+## Alternatives Considered
+- **TanStack Query** — rejected; no requirement here (background refetch, cross-component
+  cache sharing, pagination) that a plain `useEffect`-based hook doesn't already satisfy,
+  and it would be a second data-fetching pattern alongside the typed API client rather than
+  a replacement for one.
+- **Zustand/Redux** — rejected for the same reason `ARCHITECTURE.md`'s "3D Interaction &
+  State" section defers Zustand to Phase 07 (a frequently-updating 3D scene): this phase's
+  state is simple, low-frequency, and scoped to a single dataset session.
+- **visx / Observable Plot** — visx (the original assumption) was not adopted per the
+  reasoning above; Observable Plot (`ARCHITECTURE.md`'s own documented fallback) was also
+  not needed for the same reason — this phase's chart requirements turned out to be small
+  and fixed-shape once actually known, which is exactly the condition `ARCHITECTURE.md`
+  flagged for revisiting the choice.
+- **openapi-typescript codegen** — rejected for now per the reasoning above; worth
+  revisiting if the API surface grows enough that manual sync becomes error-prone (a real
+  risk future phases should watch for, not a closed question).
+
+## Consequences
+Adding a real chart type Phase 07 needs but this approach can't reasonably produce (e.g. a
+force-directed graph layout for the 3D Universe's 2D fallback) is an explicit, justified
+reason to add a charting dependency then, with its own ADR — not a retroactive judgment
+that this decision was wrong for Phase 06's actual, smaller requirements. Similarly, if the
+API surface grows substantially, introducing `openapi-typescript` (or regenerating a
+snapshot as part of CI) is a natural, additive change to `api-client/`, not a rewrite.
+
+## Related
+`../ARCHITECTURE.md` "Stack Evaluation" → "Frontend" (visx entry, superseded here),
+"Module Boundaries"; `../../01_PHASES/PHASE_06_API_FRONTEND_INTEGRATION/PHASE_REPORT.md`;
+`frontend/src/api-client/`, `frontend/src/viz/`, `frontend/src/state/`.
