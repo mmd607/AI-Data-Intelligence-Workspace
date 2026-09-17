@@ -7,9 +7,10 @@ Current phase: PHASE_03_DATA_PROFILING_VISUALIZATION
 Last completed phase: PHASE_02_DATA_INGESTION
 
 Current branch: phase/02-data-ingestion (branched from `origin/main` at `56ffd8d`, the
-human-merged Phase 01 baseline — `main` remains human-controlled; Phase 03 must branch
-fresh only after the human decides to merge/promote this branch, or from an explicit
-human-directed baseline)
+human-merged Phase 01 baseline). Since then, the human has also merged this branch into
+`main` via PR #2 (`origin/main` is now `370cf4e`) — `main` remains exclusively
+human-controlled; Phase 03 must branch fresh only after explicit human direction on the
+baseline to use.
 
 Next action:
 STOP. Phase 02 is complete, committed, and pushed to `origin/phase/02-data-ingestion`. Do
@@ -63,4 +64,11 @@ Do not mark a phase complete unless its Definition of Done is satisfied.
   storage with server-generated dataset ids (structural path-traversal defense); 50 MB
   upload limit + binary-content sniffing. 42/42 tests passing (34 new), Ruff-clean,
   verified end-to-end against a real running server. ADR-005 resolved, ADR-010 added. No
-  blockers. Full detail in `01_PHASES/PHASE_02_DATA_INGESTION/PHASE_REPORT.md`.
+  blockers. Full detail in `01_PHASES/PHASE_02_DATA_INGESTION/PHASE_REPORT.md`. Merged
+  into `main` by the human via PR #2 (`370cf4e`) — not an agent action.
+- 2026-09-17 — VERIFICATION RE-RUN — n/a — phase/02-data-ingestion — 0de1f11 (unchanged) —
+  Re-inspected repository state on request: branch/status/commit/remote all confirmed
+  identical to the last completion report; `pytest` (42/42) and `ruff check .` re-run
+  fresh with the same clean result; `git diff` against both the last local commit and
+  `origin/phase/02-data-ingestion` is empty. No outstanding Phase 02 work found. Only new
+  fact: `main` had since been merged with Phase 02 by the human (PR #2, logged above).

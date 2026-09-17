@@ -96,6 +96,11 @@ added), `00_AGENT_CONTROL/PROJECT_STATE.md`.
   `malformed_csv`; uploaded a `.json`-named file → real `400` `unsupported_file_type`;
   `/docs` returned `200`; `/openapi.json` includes both `/api/v1/datasets` and
   `/api/v1/datasets/{dataset_id}`. Verification data directory removed afterward.
+- **Re-verified on request** after the human merged this branch into `main` (PR #2,
+  `370cf4e`): fresh `pytest -q` → still **42 passed**; fresh `ruff check .` → still all
+  checks passed; `git diff` against both the last local commit and
+  `origin/phase/02-data-ingestion` confirmed empty (nothing outstanding). No code changes
+  were needed — see `00_AGENT_CONTROL/PROJECT_STATE.md` agent log for the full note.
 
 ## Known limitations
 
