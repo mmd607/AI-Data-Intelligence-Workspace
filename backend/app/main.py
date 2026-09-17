@@ -1,8 +1,9 @@
 """FastAPI application entrypoint.
 
 App wiring, CORS, logging, structured error handling, and the versioned API mount point.
-Phase 01 added the health endpoint; Phase 02 adds dataset ingestion. Profiling/ML/AI are
-later phases' modules, mounted under `settings.api_prefix` as they're built.
+Phase 01 added the health endpoint; Phase 02 added dataset ingestion; Phase 03 adds
+profiling/quality/correlation/distribution. ML/AI are later phases' modules, mounted under
+`settings.api_prefix` as they're built.
 """
 
 import logging
@@ -11,10 +12,11 @@ from fastapi import APIRouter, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api import datasets, health
+from app.api import datasets, health, profile
 from app.config import get_settings
 from app.ingestion.errors import IngestionError
 from app.logging_config import configure_logging
+from app.profiling.errors import ProfilingError
 
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -33,10 +35,11 @@ app.add_middleware(
 
 app.include_router(health.router)
 
-# Versioned API surface, per `02_DOCS/ARCHITECTURE.md` "API Contract Philosophy". Profiling
-# (Phase 03), ML (Phase 04), and AI (Phase 05) routers mount here in later phases.
+# Versioned API surface, per `02_DOCS/ARCHITECTURE.md` "API Contract Philosophy". ML
+# (Phase 04) and AI (Phase 05) routers mount here in later phases.
 api_v1 = APIRouter(prefix=settings.api_prefix)
 api_v1.include_router(datasets.router)
+api_v1.include_router(profile.router)
 app.include_router(api_v1)
 
 
@@ -49,6 +52,25 @@ async def ingestion_error_handler(request: Request, exc: IngestionError) -> JSON
     """
     logger.info(
         "Ingestion error on %s %s: %s (%s)",
+        request.method,
+        request.url.path,
+        exc.code,
+        exc.message,
+    )
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"error": {"code": exc.code, "message": exc.message}},
+    )
+
+
+@app.exception_handler(ProfilingError)
+async def profiling_error_handler(request: Request, exc: ProfilingError) -> JSONResponse:
+    """Structured, correctly-statused response for profiling failures (missing dataset,
+    unreadable file, unknown column, etc.) — same envelope as `IngestionError`, kept as an
+    independent handler per `02_DOCS/ARCHITECTURE.md` "Module Boundaries".
+    """
+    logger.info(
+        "Profiling error on %s %s: %s (%s)",
         request.method,
         request.url.path,
         exc.code,

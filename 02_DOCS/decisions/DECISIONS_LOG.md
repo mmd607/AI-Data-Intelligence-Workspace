@@ -366,3 +366,60 @@ accepted, documented risk for a local-first v1, to be hardened in Phase 08.
 `../ARCHITECTURE.md` "Data Storage"; `../PRODUCT_SPEC.md` "Open Questions";
 `../../01_PHASES/PHASE_02_DATA_INGESTION/PHASE_REPORT.md`;
 `../../01_PHASES/PHASE_08_TESTING_DOCKER_DEPLOYMENT/PHASE_PROMPT.md`.
+
+---
+
+# ADR-011: Profiling Thresholds, Correlation & Distribution Strategy
+
+**Date:** 2026-09-17
+**Status:** ✅ CONFIRMED
+**Phase:** PHASE_03_DATA_PROFILING_VISUALIZATION
+
+## Context
+`01_PHASES/PHASE_03_DATA_PROFILING_VISUALIZATION/PHASE_PROMPT.md` requires deterministic
+quality checks, correlation analysis, and distribution data, but leaves the exact
+thresholds and statistical choices to the implementing phase — they need to be fixed,
+documented constants, not ad hoc or learned values, to remain deterministic and
+explainable to a future AI-explanation layer (Phase 05).
+
+## Decision
+- **Quality thresholds** (all fixed constants in `app/profiling/quality.py`): missing
+  values ≥20% → warning, ≥50% → critical (dataset- and column-level); near-constant column
+  at ≥95% single-value share; high-cardinality categorical at >50% unique-value ratio;
+  mixed-type column at 10–90% numeric-coercible ratio; datetime detection at ≥90% parse
+  success (`column_types.py`).
+- **Correlation:** Pearson only, `minimum_observations` configurable (default 3), missing
+  values handled pairwise per column pair, boolean columns excluded from numeric
+  eligibility, an explicit `"insufficient_data"` status rather than a failure or a
+  misleadingly empty success.
+- **Distribution:** `numpy.histogram`, fixed default 10 bins, computed only over finite
+  values; non-numeric/boolean columns and columns with no finite values are reported in
+  `skipped_columns`, not force-fit into a histogram.
+- **Infinite values:** excluded from descriptive statistics (min/max/mean/median/std/
+  quartiles), counted separately as `infinite_count`, and raised as a `critical` quality
+  finding — never allowed to propagate `inf`/`NaN` into the JSON response.
+- **Storage reuse:** `app.ingestion.StorageService` gained one new public method
+  (`get_raw_file_path`) rather than profiling building its own storage layer, per the
+  phase prompt's explicit "do not create a second incompatible dataset storage system."
+
+## Alternatives Considered
+- **Learned/adaptive thresholds** (e.g. IQR-based outlier-style thresholds per dataset) —
+  rejected: violates "deterministic computation is the source of truth" in spirit, since
+  the *threshold itself* would then depend on the data being evaluated, making results
+  harder to explain consistently across datasets. Fixed, documented constants were chosen
+  instead.
+- **Dataset-wide `dropna()` for correlation** — rejected: would discard entire rows for a
+  column pair even when other pairs don't need to, reducing usable observations
+  unnecessarily.
+- **A larger or dataset-size-relative bin count for histograms** — rejected for v1
+  simplicity; a fixed default is easier to reason about and test; revisit if real-world
+  datasets show it's inadequate.
+
+## Consequences
+Every threshold above is a named constant in the relevant module, cross-referenced from
+this ADR — a future phase (or a human) adjusting one should update both the constant and
+this record, not just the code.
+
+## Related
+`../ARCHITECTURE.md` "Profiling Architecture (Phase 03)";
+`../../01_PHASES/PHASE_03_DATA_PROFILING_VISUALIZATION/PHASE_REPORT.md`.
