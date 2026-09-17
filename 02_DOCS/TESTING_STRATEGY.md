@@ -55,10 +55,23 @@ this document is the shared methodology and tooling behind it.
 
 ## 3. Frontend Tooling
 
-- ✅ CONFIRMED — **Vitest** + **React Testing Library** for component/unit tests, matching
-  the ZIP's own baseline ("Vitest/Playwright or equivalent for frontend").
-- 🟡 ASSUMED — **Playwright** for end-to-end tests (from Phase 06 onward), covering the
-  primary upload-to-Universe flow and the 2D fallback path.
+- ✅ CONFIRMED — **Vitest** + **React Testing Library** (+ **@testing-library/user-event**,
+  added Phase 06) for component/unit/integration tests, matching the ZIP's own baseline
+  ("Vitest/Playwright or equivalent for frontend"). **Actual, measured (Phase 06):** 12
+  test files, 33 tests, all passing — `api-client/*.test.ts` (mocked-`fetch` contract
+  tests per domain module) and one test file per `features/` page (upload success/
+  validation-failure/server-error/loading states; profile/quality/analytics rendering and
+  empty/error states; the full ML configure→validate→train flow including a training
+  error; the AI page's available/unavailable/evidence-display states; the Q&A panel's
+  grounded-answer and unsupported-question states).
+- 🟡 ASSUMED, **not adopted this phase** — Playwright end-to-end tests. Phase 06's actual
+  full-stack verification (real backend + real frontend dev server, the complete upload →
+  overview → quality → analytics → ML → AI flow, including live model training and a
+  grounded Q&A exchange) was performed manually through the built-in browser tooling
+  instead — see `01_PHASES/PHASE_06_API_FRONTEND_INTEGRATION/PHASE_REPORT.md` "Tests/
+  checks" for the exact run. Automating that flow with Playwright remains a reasonable
+  future addition (its own dependency-policy entry when adopted), not a Phase 06 gap in
+  actual verification coverage.
 - ❓ OPEN QUESTION — visual regression tooling (e.g. Percy, Chromatic) for the 3D scene is a
   nice-to-have, not adopted by default; would need its own dependency justification in
   `ARCHITECTURE.md`/`decisions/DECISIONS_LOG.md` before adoption.

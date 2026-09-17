@@ -112,12 +112,20 @@ v1 is complete when, from a clean clone:
 1. A user can start the app locally (`docker compose up`, Phase 08) with no manual fixes.
 2. A user can upload a real dataset and see, end-to-end, through the 3D Universe: its
    quality profile, its statistics/visualizations, and a baseline ML result — all real
-   computed data, no mock data in the primary flow.
+   computed data, no mock data in the primary flow. The data/flow half of this is ✅
+   CONFIRMED as of Phase 06 via the 2D fallback view (`UI_UX_SPEC.md` §3/§4.7) — upload →
+   overview → quality → analytics → ML → AI insight, verified end-to-end against a real
+   running backend with no mock data remaining anywhere in that flow; the 3D presentation
+   layer itself remains Phase 07's job.
 3. Disabling the AI layer entirely leaves the product fully functional (principle 4).
 4. Every number shown as "computed" is reproducible from the same input data.
 5. Every AI-generated explanation is visually and structurally distinguishable from
    computed data (principle 2), and provably does not introduce new numeric claims not
-   present in the computed payload (principle 3).
+   present in the computed payload (principle 3). The frontend rendering half of this is
+   ✅ CONFIRMED as of Phase 06 — `frontend/src/panels/AIExplanationBlock.tsx` renders every
+   AI explanation as a visually distinct, subordinate, plain-text-only block per
+   `UI_UX_SPEC.md` §4.6; the backend grounding guarantee itself was already proven in
+   Phase 05.
 6. The 3D interface meets the anti-goals in `UI_UX_SPEC.md` (no neon, no cartoonish 3D,
    nothing purely decorative) and degrades gracefully on low-end hardware / no WebGL.
 7. CI passes (lint, unit, integration, build) per `TESTING_STRATEGY.md`.

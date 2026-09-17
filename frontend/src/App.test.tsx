@@ -1,48 +1,57 @@
 import { render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
 import App from "./App";
 
-// The 3D scene needs a real WebGL context, which jsdom does not provide. Per
-// 02_DOCS/TESTING_STRATEGY.md §4, the 3D layer is tested via logic/state tests, not by
-// rendering the actual Canvas in a DOM-only test environment — so it's stubbed here.
-vi.mock("./scene/UniversePlaceholder", () => ({
-  UniversePlaceholder: () => <div data-testid="universe-placeholder-stub" />,
-}));
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), { status });
+}
 
 describe("App", () => {
-  it("shows a loading state and then reflects a successful backend connection", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          status: "ok",
-          service: "AI Data Intelligence Workspace API",
-          environment: "development",
-          timestamp: "2026-09-17T00:00:00Z",
-        }),
-        { status: 200 },
-      ),
+  it("shows the upload landing page with existing datasets", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse([]));
+
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <App />
+      </MemoryRouter>,
     );
 
-    render(<App />);
+    expect(screen.getByRole("heading", { name: /upload a dataset/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /upload a csv dataset/i })).toBeInTheDocument();
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
 
-    expect(screen.getByText(/Checking backend/i)).toBeInTheDocument();
+    vi.restoreAllMocks();
+  });
+
+  it("shows an error state when the dataset list request fails", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("network down"));
+
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <App />
+      </MemoryRouter>,
+    );
 
     await waitFor(() => {
-      expect(screen.getByText(/Backend connected — development/i)).toBeInTheDocument();
+      expect(screen.getByText(/could not reach the server/i)).toBeInTheDocument();
     });
 
     vi.restoreAllMocks();
   });
 
-  it("shows an error state when the backend is unreachable", async () => {
-    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("network down"));
+  it("redirects an unknown route back to the upload landing page", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse([]));
 
-    render(<App />);
+    render(
+      <MemoryRouter initialEntries={["/does-not-exist"]}>
+        <App />
+      </MemoryRouter>,
+    );
 
-    await waitFor(() => {
-      expect(screen.getByText(/Backend unavailable/i)).toBeInTheDocument();
-    });
+    expect(screen.getByRole("heading", { name: /upload a dataset/i })).toBeInTheDocument();
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
 
     vi.restoreAllMocks();
   });

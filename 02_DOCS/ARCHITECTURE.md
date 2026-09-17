@@ -35,7 +35,7 @@ is fashionable"). Every dependency added beyond this baseline needs its own entr
 | Vite | Adopted | ✅ CONFIRMED | Fast dev loop, first-class React+TS template; no SSR/SEO requirement exists for this single-page tool. |
 | Tailwind CSS | Adopted | ✅ CONFIRMED | Fast, consistent utility styling for the 2D chrome; keeps the design-token system (`UI_UX_SPEC.md`) centralized. |
 | React Three Fiber + Three.js | Adopted | ✅ CONFIRMED | The Universe is not optional — it's the product's primary interface. R3F is the standard, well-maintained React binding, keeping the 3D scene declarative and testable at the state level. `@react-three/drei` is the standard helper library (camera controls, text, instancing) — 🟡 ASSUMED, confirmed in Phase 07. |
-| Data visualization library | **visx** (Airbnb), with D3 utilities underneath | 🟡 ASSUMED | Evaluated against Recharts, Nivo, and Observable Plot. Higher-level libraries (Recharts/Nivo) were set aside because their default visual identity reads as "generic dashboard" (principle 5) and their theming ceiling is lower than the "premium" bar `UI_UX_SPEC.md` sets. visx gives low-level control at the cost of more implementation work. **Revisit in Phase 03** when real chart requirements are known; Observable Plot is the documented fallback if implementation velocity suffers. |
+| Data visualization library | **Hand-rolled SVG** (`frontend/src/viz/`), no charting dependency | ✅ CONFIRMED (Phase 06, supersedes the earlier visx assumption) | Phase 03 (backend-only) never actually exercised this decision, so it was still open going into Phase 06. Once real requirements were known (a fixed-bin histogram, a correlation-magnitude bar, a categorical frequency list — all driven by data the backend already computes/bins), they turned out small and fixed-shape enough that a general-purpose charting library's value (chart types, scales, interactions) wasn't needed. See ADR-015. Revisit if Phase 07 needs chart types this doesn't reasonably cover. |
 
 ### Backend
 
@@ -128,10 +128,15 @@ explicitly configured a real provider (principle 4).
 
 **Frontend** (`frontend/src/`, created Phase 01):
 - `universe/` — R3F scene, node components, camera, connection lines (Phase 07)
-- `panels/` — inspector panel UI, computed/AI-generated visual distinction (Phase 06/07)
-- `viz/` — 2D chart components (visx-based) (Phase 03)
+- `panels/` — inspector panel UI, computed/AI-generated visual distinction (Phase 06/07) —
+  see "Frontend Integration Architecture" below
+- `viz/` — 2D chart components, hand-rolled SVG (Phase 06; see ADR-015)
 - `api-client/` — the *only* module allowed to call the backend (Phase 01/06)
-- `state/` — Zustand stores (Phase 07)
+- `state/` — per-dataset session context (Phase 06); Zustand for 3D scene state (Phase 07)
+- `features/` — one directory per UX-flow step (upload, workspace, quality, analytics, ml,
+  ai) (Phase 06)
+- `components/` — reusable, feature-agnostic UI primitives (Phase 06)
+- `hooks/` — data-fetching hooks (`useAsync`/`useLazyAsync`) (Phase 06)
 
 **Backend** (`backend/`, created Phase 01):
 - `ingestion/` — upload, validation, storage (Phase 02)
@@ -330,6 +335,52 @@ through to `EXPLANATION` (dataset-quality-shaped, given full bounded context) or
 - The Anthropic API key is read once from `Settings` (a Pydantic `SecretStr`, never logged)
   and used only in the `x-api-key` HTTP header — no response schema has a field that could
   hold it, and no evidence dict ever contains application configuration.
+
+## Frontend Integration Architecture (Phase 06)
+
+The 2D application wired up in this phase — the "List/Table" fallback view
+`UI_UX_SPEC.md` §3 requires Phase 06 to build first, ahead of Phase 07's 3D layer on top:
+
+- **`api-client/`** — `http.ts` holds the single `fetch` wrapper (`request()`) and
+  `ApiError` (carrying `status` and, when the backend returned its own structured
+  `{"error": {"code", "message"}}` envelope, `code`); every other file in this directory is
+  a thin, typed function per backend endpoint, grouped by domain (`datasets.ts`,
+  `profiling.ts`, `ml.ts`, `ai.ts`), re-exported through `index.ts`. `types.ts` mirrors the
+  backend's actual Pydantic schemas field-for-field — verified against the schema source
+  files, never invented (see ADR-015 for why this stays hand-written rather than
+  OpenAPI-codegen'd). No component ever calls `fetch` directly.
+- **`hooks/useAsync.ts`** — `useAsync(fn, deps)` runs on mount/dependency-change (view data
+  loads); `useLazyAsync(fn)` runs only when explicitly triggered (user actions: upload,
+  train, ask a question). Both track the same `{idle | loading | success | error}` state
+  shape, which is what every view's loading/error/empty rendering is driven from
+  (`UI_UX_SPEC.md` §8).
+- **`features/`** — one directory per UX-flow step (`upload/`, `workspace/`, `quality/`,
+  `analytics/`, `ml/`, `ai/`), each a thin page component composing `api-client` calls
+  (via the hooks above) with `components/`/`viz/`/`panels/` primitives. No business
+  calculation happens here — every displayed value is passed through from the API
+  response, never recomputed client-side (this phase's own acceptance criterion).
+- **Routing (`react-router-dom`, ADR-015)** — `/` (upload + existing-dataset list),
+  `/datasets/:datasetId` (workspace layout: fetches `DatasetMetadata` once, provides it to
+  nested routes via `useOutletContext`) with nested routes `/quality`, `/analytics`, `/ml`,
+  `/ai`. An unknown route redirects to `/` rather than rendering a broken page.
+  `state/DatasetSessionContext.tsx` is provided at the workspace layout level, scoped to
+  one dataset session — the last trained `ModelResult` (needed by the AI `ml_explanation`
+  capability, since the backend has no model-persistence layer, ADR-013) lives here, not
+  in a global store.
+- **`panels/AIExplanationBlock.tsx` / `EvidenceSources.tsx`** — the concrete implementation
+  of `UI_UX_SPEC.md` §4.6's computed-vs-AI-generated visual contract: a subordinate,
+  tinted block below the computed data it explains, labeled "AI explanation — `<provider>`
+  `(<model>)`", rendering `ai_explanation.text` as plain text only (never
+  `dangerouslySetInnerHTML` — AI output is untrusted content, per this phase's own
+  security requirement) alongside the response's real `limitations` and
+  `evidence_sources`. `AIUnavailableNotice` renders instead whenever `available` is
+  `false`, using the backend's own `reason` — the deterministic `computed` data is always
+  rendered regardless of AI availability, since the grounding contract (Phase 05) means it
+  was never dependent on a provider succeeding.
+- **`viz/`** — hand-rolled SVG components (`Histogram`, `CorrelationBar`, `FrequencyList`),
+  each rendering the backend's own already-computed bins/coefficients/frequencies verbatim
+  — no client-side binning or statistical recomputation. See ADR-015 for why no charting
+  library was added.
 
 ## Data Flow & the Computed/AI-Generated Contract
 
