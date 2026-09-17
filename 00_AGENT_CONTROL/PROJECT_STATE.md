@@ -74,8 +74,7 @@ Do not mark a phase complete unless its Definition of Done is satisfied.
   (`backup/pre-claude-cleanup-*` local branches, never pushed, never deleted). Pushed with
   `--force-with-lease` (never `--force`) after explicit human confirmation at each stage.
   No project files altered.
-- 2026-09-17 — PHASE 03 — COMPLETE — phase/03-data-profiling-visualization — (hash
-  recorded in a follow-up entry, same reason as prior phases) — Deterministic data
+- 2026-09-17 — PHASE 03 — COMPLETE — phase/03-data-profiling-visualization — 9a98f5e — Deterministic data
   profiling: dataset/column-level statistics (numeric/categorical/datetime), a
   rule-based quality-findings engine (missing values, duplicates, constant/near-constant
   columns, high-cardinality categoricals, mixed types, infinite values, unexpected

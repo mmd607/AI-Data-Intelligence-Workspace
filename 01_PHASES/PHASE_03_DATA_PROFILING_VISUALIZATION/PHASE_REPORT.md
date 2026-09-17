@@ -123,8 +123,10 @@ Changed: `backend/app/main.py` (router mount + exception handler),
 
 ## Git
 
-Commits (on `phase/03-data-profiling-visualization`): recorded in the completion message
-— hash cannot be self-referenced in this file within the same commit that includes it.
+Commits (on `phase/03-data-profiling-visualization`): `9a98f5e` — `feat(phase-03):
+implement deterministic data profiling engine`, followed by a small commit recording this
+hash back into this report and `PROJECT_STATE.md` (unavoidable, same reason as prior
+phases).
 
 Remote branch: `origin/phase/03-data-profiling-visualization` — pushed and existence
 verified (see completion message).
