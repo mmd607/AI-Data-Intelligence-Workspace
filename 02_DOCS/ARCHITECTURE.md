@@ -65,20 +65,21 @@ is fashionable"). Every dependency added beyond this baseline needs its own entr
 
 ### AI Mode Abstraction
 
-- ✅ CONFIRMED — A provider-style interface with at minimum two implementations:
+- ✅ CONFIRMED (Phase 05) — A provider-style interface (`app/ai/provider.py`'s `AIProvider`
+  ABC) with two implementations selected by `APP_AI_PROVIDER` (`offline` / `anthropic` /
+  `disabled`), no silent fallback between them:
   1. **Offline deterministic explainer** (default, no API key, no network call) — produces
      template-based natural-language summaries strictly from the computed payload's own
      fields. This satisfies principle 4 outright, and gives principle 3 a structurally
      enforced ceiling: the template can only reference fields that exist in the computed
      payload, so it cannot invent a number.
-  2. **Real LLM provider** (opt-in, user-supplied API key via environment variable, never
-     committed) — 🟡 ASSUMED to be an Anthropic Claude model as the first real integration,
-     not a hard architectural commitment; the interface is provider-agnostic. Confirmed in
-     Phase 05.
-- ✅ CONFIRMED — every AI call receives only the already-computed JSON payload as context
-  and an instruction to explain, never raw data plus "compute a new number." This mirrors
-  the ZIP's own `PHASE_05_AI_ANALYTICS` prompt: "The LLM is an interpreter, not the source
-  of truth."
+  2. **Real LLM provider** — ✅ CONFIRMED as Anthropic's Messages API, called directly via
+     `httpx` (already a project dependency) rather than an SDK — see ADR-014. Opt-in only,
+     user-supplied API key via environment variable, never committed.
+- ✅ CONFIRMED — every AI call receives only the already-computed, size-bounded evidence
+  dict as context and an instruction to explain, never raw dataset rows plus "compute a new
+  number." This mirrors the ZIP's own `PHASE_05_AI_ANALYTICS` prompt: "The LLM is an
+  interpreter, not the source of truth."
 
 ### Infrastructure
 
@@ -137,7 +138,8 @@ explicitly configured a real provider (principle 4).
 - `profiling/` — data quality engine + statistics (Phase 03) — see "Profiling
   Architecture" below for its internal module breakdown
 - `ml/` — baseline model training/evaluation (Phase 04)
-- `ai/` — mode abstraction + implementations (Phase 05)
+- `ai/` — mode abstraction + implementations (Phase 05) — see "AI Analytics Architecture"
+  below for its internal module breakdown
 - `api/` — thin FastAPI routers only; no business logic lives here
 
 No module reaches into another module's internals — only through its public interface
@@ -248,6 +250,87 @@ add a huge model zoo"): `LogisticRegression`/`RandomForestClassifier` for classi
 `LinearRegression`/`Ridge`/`RandomForestRegressor` for regression. XGBoost was concretely
 benchmarked and not adopted — see ADR-004 for the real numbers.
 
+## AI Analytics Architecture (Phase 05)
+
+`app/ai/` is split by responsibility, mirroring `app/profiling/`'s and `app/ml/`'s pattern:
+
+- `errors.py` — `AIError` (same `{code, message, status_code}` shape as
+  `IngestionError`/`ProfilingError`/`MLError`, independent class).
+- `schemas.py` — every Pydantic request/response model, including `AIAnalyzeResponse`/
+  `AIQueryResponse`'s `computed` + `ai_explanation` envelope (see "Data Flow" below).
+- `provider.py` — the `AIProvider` ABC (`is_available()`, `generate()`) every provider
+  implements, so `service.py` never depends on a specific vendor.
+- `providers/offline.py` — the default, always-available provider; pure string
+  interpolation into fixed templates, described further under "The Grounding Guarantee"
+  below.
+- `providers/anthropic_provider.py` — the real-LLM provider (ADR-014); every failure mode
+  (missing key, timeout, network error, 401/429/5xx, malformed response) is caught and
+  re-raised as a structured `AIError`, never a raw `httpx` exception.
+- `factory.py` — `get_provider(settings)`: `disabled` → `None`, `anthropic` → an
+  `AnthropicProvider` (even if misconfigured — its own `is_available()` reports that
+  honestly; the factory never silently substitutes the offline provider), otherwise →
+  `OfflineProvider`.
+- `security.py` — `SYSTEM_INSTRUCTIONS` (the untrusted-data hierarchy) and
+  `build_user_prompt()`, which structurally separates evidence-as-data from the request.
+- `evidence.py` — deterministic, size-bounded evidence builders, one per capability, each
+  reusing Phase 02-04's own already-computed output (`build_dataset_profile`,
+  `build_quality_summary`, `profile_column`, `compute_correlation` — never re-deriving a
+  statistic independently, which would risk it drifting from what Phase 03/04 actually
+  computed).
+- `routing.py` — deterministic-first question routing (`route_question`): a fixed set of
+  recognized question shapes (duplicates, missing values, correlation, column statistics,
+  ML metrics) resolved by direct lookup into Phase 02-04 output, never by asking a
+  provider to compute a number.
+- `service.py` — orchestration: builds evidence, calls the configured provider, assembles
+  the response contract. Never raises for a provider failure (turns it into
+  `available: false` + `reason`); only raises `AIError` for a genuinely bad request (unknown
+  column, malformed `ml_result`).
+
+### The Grounding Guarantee
+
+The core architectural invariant (`01_PHASES/PHASE_05_AI_ANALYTICS/PHASE_PROMPT.md` section
+22): **the `computed` field is built from deterministic evidence and frozen *before* any AI
+provider is ever called, and is never written to afterward.** A provider's `generate()`
+returns only `ProviderResult.text` — there is no parameter, return path, or shared mutable
+state through which a provider could alter `computed`. This is enforced structurally, not
+just by prompting, and proven by `tests/test_ai_grounding.py`: a `FakeProvider` configured
+to return a deliberately fabricated/wrong answer (e.g. "this dataset actually has 999
+rows") never changes `response.computed["row_count"]`, `["numeric_stats"]["mean"]`,
+correlation coefficients, ML metrics, or a deterministic query's `resolved_answer` — only
+`ai_explanation.text` reflects the fabrication.
+
+The offline provider is additionally *structurally* immune to prompt injection: it never
+"interprets" a string, it only ever substitutes named evidence fields into fixed template
+sentences (`providers/offline.py`), so a malicious column name or cell value can appear
+verbatim in the rendered text but can never change *which* text is rendered or what data it
+reports. The real (Anthropic) provider relies on the same evidence-as-untrusted-data
+structure plus explicit system instructions (`security.py`) — see `test_ai_security.py`
+for injection-attempt tests via both column names and cell values.
+
+### Deterministic-First Question Routing
+
+Free-form questions to `POST .../ai/query` are matched against a small, fixed set of
+patterns (`routing.py`) *before* any provider is involved — e.g. "how many rows are
+duplicated" resolves directly from `build_dataset_profile`'s own duplicate count, never
+from an LLM's arithmetic. Column-statistic questions ("what is the average of X") use
+word-boundary regex matching against real column names (`\bcolumn_name\b`), not a naive
+substring check — a naive check would let "age" falsely match inside "average" and answer
+with the wrong column's statistic, which would violate the grounding principle by
+"resolving" a question that was never actually about that column. Unmatched questions fall
+through to `EXPLANATION` (dataset-quality-shaped, given full bounded context) or
+`ANALYTICAL_INTERPRETATION` (open-ended, still evidence-only) — never silently guessed.
+
+### Data Minimization & Secret Protection
+
+- Evidence sent to any provider is capped: `MAX_SUMMARY_COLUMNS=30`,
+  `MAX_QUALITY_FINDINGS=20`, `MAX_CORRELATION_PAIRS=10` (sorted by `abs(coefficient)`, so
+  the most significant pairs survive the cap), plus the ≤5 sample values already capped by
+  Phase 03's column profiling. Raw dataset rows are never sent — only these bounded,
+  already-aggregated facts.
+- The Anthropic API key is read once from `Settings` (a Pydantic `SecretStr`, never logged)
+  and used only in the `x-api-key` HTTP header — no response schema has a field that could
+  hold it, and no evidence dict ever contains application configuration.
+
 ## Data Flow & the Computed/AI-Generated Contract
 
 Flow: `upload → validate → store → profile → statistics → (optional) ML → (optional) AI
@@ -317,7 +400,6 @@ alongside its use.
 
 ## Open Questions / Risks
 
-- ❓ Final AI real-provider choice (Phase 05).
 - **Risk:** visx's lower-level API may slow down Phase 03 delivery relative to a
   higher-level chart library; mitigated by the documented fallback and by acceptance
   criteria not being tied to a specific library, only to correctness and visual quality.

@@ -37,6 +37,12 @@ this document is the shared methodology and tooling behind it.
     --cov-report=term-missing`) — every line, including edge cases like a NaN-poisoned
     ROC-AUC input and a high-cardinality categorical warning, is exercised by a real,
     meaningful test, not an artificially inflated one.
+  - Phase 05 — `app/ai/`: **100% line coverage** (`pytest --cov=app.ai
+    --cov-report=term-missing`, 342 tests total across the whole backend suite). The single
+    exception is one documented, provably-unreachable defensive `raise` in
+    `service._build_analyze_evidence` (guarded by a Pydantic-validated enum where every
+    current member is already handled), marked `# pragma: no cover` with an inline
+    explanation rather than covered by a contrived test.
   The goal throughout is 100% coverage of the important logic paths, not meaningless
   coverage inflation — see each phase's own report for what was deliberately left
   uncovered and why.
@@ -90,19 +96,46 @@ The 3D Universe (Phase 07) is tested primarily through:
 
 ## 6. AI-Layer Testing
 
-- A test proves the **offline mode makes zero network calls** and requires no API key —
-  matches the ZIP's own Phase 05 "Fallback" requirement ("The product should remain useful
-  if no external LLM API is configured. Provide a clear local/mock mode for development and
-  tests") and is the concrete enforcement of product principle 4.
-- A test proves AI-generated explanation text **only references values present in the
-  computed payload** it was constructed from — enforced structurally (the offline mode's
-  templates can only interpolate known fields; the real-provider path is tested by
-  verifying the prompt/context construction only ever includes the computed payload, not
-  raw data) — the concrete enforcement of principle 3, matching the ZIP's own "prevent
-  unsupported numerical claims" requirement.
-- A UI test confirms the computed vs. AI-generated visual distinction (`UI_UX_SPEC.md`
-  §4.6) actually renders as two structurally different blocks, not just different CSS
-  classes with identical layout.
+✅ CONFIRMED (Phase 05) — `backend/tests/test_ai_*.py`, organized by concern:
+
+- **`test_ai_provider_offline.py`** — the offline provider makes zero network calls and
+  requires no API key (concrete enforcement of product principle 4), and every intent's
+  template renders the exact facts present in its evidence dict.
+- **`test_ai_provider_anthropic.py`** — the real provider's every `httpx.post` call is
+  mocked (`unittest.mock.patch`); this suite never makes a live network request. Covers
+  availability checks and every failure mode (timeout, network error, 401, 429, other
+  4xx/5xx, malformed response body).
+- **`test_ai_factory.py`** — disabled/offline/anthropic-misconfigured/anthropic-configured
+  provider selection, confirming no silent fallback.
+- **`test_ai_evidence.py`** — each evidence builder's determinism, size caps, and error
+  handling (unknown column, missing/malformed `ml_result`).
+- **`test_ai_routing.py`** — every deterministic-question pattern, including the
+  word-boundary column-matching fix (a column name must not match as a substring of another
+  word) and non-numeric/undefined-statistic fallthrough.
+- **`test_ai_service.py`** — orchestration via a `FakeProvider` test double: disabled mode,
+  an unavailable provider, provider runtime errors, and successful generation all still
+  return `computed`.
+- **`test_ai_grounding.py`** (the mandatory grounding-guarantee suite,
+  `01_PHASES/PHASE_05_AI_ANALYTICS/PHASE_PROMPT.md` section 22) — proves that a
+  `FakeProvider` returning deliberately fabricated/wrong text (wrong row count, wrong mean,
+  wrong correlation coefficient, wrong ML metric, wrong duplicate count) never changes the
+  corresponding `computed` value; also proves determinism across repeated calls and that a
+  provider cannot inject new keys into `computed`. This is the concrete, structurally
+  enforced form of product principle 3, going beyond "the template can only interpolate
+  known fields" to an end-to-end proof at the response-contract level.
+- **`test_ai_security.py`** — prompt-injection attempts via both column names and cell
+  values are proven to reach a provider only as inert evidence data, never as an
+  instruction; API keys never appear in the `/ai/status` response; evidence sent to a
+  provider is proven bounded (no raw per-row values, sample values capped, wide-dataset
+  column lists capped).
+- **`test_ai_api.py`** — full API integration tests for `/ai/status`, `/analyze`, `/query`,
+  including structured error paths (`column_not_found`, `ml_result_required`,
+  `dataset_not_found`) and OpenAPI schema registration.
+
+A UI test will later confirm the computed vs. AI-generated visual distinction
+(`UI_UX_SPEC.md` §4.6) actually renders as two structurally different blocks, not just
+different CSS classes with identical layout — deferred to Phase 06/07 (frontend), out of
+scope for the backend-only Phase 05.
 
 ## 7. Test Data & Fixtures Policy
 
