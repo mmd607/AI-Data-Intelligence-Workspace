@@ -174,9 +174,9 @@ full 342-test backend suite still passes.
 
 ## Git
 
-Commits (on `phase/06-api-frontend-integration`): `feat(phase-06): integrate frontend
-with Phase 02-05 backend`, followed by a small commit recording that hash back into this
-report and `PROJECT_STATE.md` (unavoidable, same reason as prior phases).
+Commits (on `phase/06-api-frontend-integration`): `9c1d0ad` — `feat(phase-06): integrate
+frontend with Phase 02-05 backend`, followed by a small commit recording this hash back
+into this report and `PROJECT_STATE.md` (unavoidable, same reason as prior phases).
 
 Remote branch: `origin/phase/06-api-frontend-integration` — pushed and existence verified
 (see completion message).

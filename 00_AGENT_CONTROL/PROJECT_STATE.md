@@ -116,8 +116,8 @@ Do not mark a phase complete unless its Definition of Done is satisfied.
   matching, e.g. "age" inside "average") was found and fixed by this phase's own tests.
   ADR-014 added. No blockers. Full detail in
   `01_PHASES/PHASE_05_AI_ANALYTICS/PHASE_REPORT.md`.
-- 2026-09-18 — PHASE 06 — COMPLETE — phase/06-api-frontend-integration — TBD (recorded in
-  a follow-up commit) — Full 2D frontend integration of Phases 02-05: a typed API client
+- 2026-09-18 — PHASE 06 — COMPLETE — phase/06-api-frontend-integration — 9c1d0ad — Full 2D
+  frontend integration of Phases 02-05: a typed API client
   (`api-client/http.ts` + one file per domain, types transcribed from the real backend
   schemas) replacing the Phase 01 placeholder shell; the real upload → dataset workspace
   (overview/columns → quality → analytics → ML → AI insights) flow wired to real backend
