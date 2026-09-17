@@ -43,10 +43,9 @@ Do not mark a phase complete unless its Definition of Done is satisfied.
   `00_AGENT_CONTROL/` + `01_PHASES/` + `02_DOCS/` + `03_TEMPLATES/` system, which is now the
   sole authoritative control system per `02_DOCS/decisions/DECISIONS_LOG.md` ADR-R001.
   Committed as the first commit on `phase/01-foundation` (never on `main`).
-- 2026-09-17 — PHASE 01 — COMPLETE — phase/01-foundation — (see commit below, filled in
-  immediately after committing) — FastAPI backend scaffold (`/health`, config, logging,
-  structured error handling, 4 passing tests, Ruff-clean) and Vite/React/TS/Tailwind
-  frontend scaffold (typed api-client, connectivity-status shell, placeholder R3F canvas,
-  5 passing tests, ESLint-clean, build succeeds) built and verified end-to-end in a real
-  browser against a real running backend. Full detail in
-  `01_PHASES/PHASE_01_FOUNDATION/PHASE_REPORT.md`. No blockers.
+- 2026-09-17 — PHASE 01 — COMPLETE — phase/01-foundation — d08e461 — FastAPI backend
+  scaffold (`/health`, config, logging, structured error handling, 4 passing tests,
+  Ruff-clean) and Vite/React/TS/Tailwind frontend scaffold (typed api-client,
+  connectivity-status shell, placeholder R3F canvas, 5 passing tests, ESLint-clean, build
+  succeeds) built and verified end-to-end in a real browser against a real running backend.
+  Full detail in `01_PHASES/PHASE_01_FOUNDATION/PHASE_REPORT.md`. No blockers.

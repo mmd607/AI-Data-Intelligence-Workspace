@@ -104,13 +104,14 @@ servers were stopped afterward; nothing is left running.
 ## Git
 
 Commits (on `phase/01-foundation`, none on `main`):
-1. `docs: establish authoritative project foundation and control system` (foundation
-   reconciliation — see previous report/message for detail; not new Phase 01 work, but the
-   first commit on this branch since it couldn't be committed to `main`).
-2. Phase 01 implementation commit — hash reported in the completion message below (this
-   report is included in that same commit, so its hash cannot be self-referenced here;
-   see `PROJECT_STATE.md`'s `Last Commit` field, updated immediately after in a small
-   follow-up commit).
+1. `91b7ca0` — `docs: establish authoritative project foundation and control system`
+   (foundation reconciliation — not new Phase 01 work, but the first commit on this branch
+   since it couldn't be committed to `main`).
+2. `d08e461` — `feat: Phase 01 foundation scaffold (backend + frontend)` (this phase's
+   implementation).
+3. A small immediate follow-up commit recording `d08e461`'s hash in
+   `PROJECT_STATE.md`'s `Last Commit` field (unavoidable — the hash of a commit cannot be
+   known and written into a file included in that same commit).
 
 Remote branch: `origin/phase/01-foundation` — pushed and existence verified (see
 completion message).
