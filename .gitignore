@@ -23,9 +23,10 @@ build/
 .env.*
 !.env.example
 
-# IDE
+# IDE / local agent tooling
 .vscode/
 .idea/
+.claude/
 
 # OS
 .DS_Store
