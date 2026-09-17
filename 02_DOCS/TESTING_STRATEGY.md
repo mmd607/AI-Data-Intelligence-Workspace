@@ -28,7 +28,12 @@ this document is the shared methodology and tooling behind it.
 - 🟡 ASSUMED coverage target: **≥80% line coverage** for core logic modules (`ingestion/`,
   `profiling/`, `ml/`, `ai/`); a lower bar is acceptable for thin router/glue code (`api/`)
   where the logic is exercised indirectly by integration tests. Exact numbers are finalized
-  and measured for real in Phase 08.
+  and measured for real in Phase 08. **Actual, measured (Phase 03):** `app/profiling/` —
+  99% line coverage (`pytest --cov=app.profiling --cov-report=term-missing`); the one
+  uncovered line is a provably-unreachable defensive guard in a private helper (its only
+  caller already checks the same condition first) — left uncovered deliberately rather
+  than adding a contrived test or stripping a harmless safety check — the goal is 100%
+  coverage of the important logic paths, not meaningless coverage inflation.
 - Fixture datasets (small, synthetic, engineered to have known properties — known null
   counts, known duplicates, known distributions) live under a test-fixtures directory
   (🟡 ASSUMED path: `backend/tests/fixtures/`), are checked into git (they contain no
@@ -68,6 +73,14 @@ The 3D Universe (Phase 07) is tested primarily through:
 - ML reproducibility is tested via fixed random seeds, asserting metric stability within an
   explicit, documented tolerance across repeated runs (Phase 04, matching the ZIP's own
   "reproducible random seeds" requirement).
+- **Pattern established in Phase 03** (recommended for Phase 04+): pure computation
+  functions (e.g. `compute_numeric_stats`, `compute_correlation`) are unit-tested with
+  `pandas.Series`/`DataFrame` objects constructed directly in the test — no file I/O,
+  precise control over edge cases (nulls, infinities, single values, empty data). Fixture
+  CSV files under `backend/tests/fixtures/` are reserved for API-level integration tests
+  that need to exercise the real upload → storage → load round-trip. Keeping the two
+  separate avoids both slow, fixture-heavy unit tests and imprecise, hard-to-construct
+  edge cases in integration tests.
 
 ## 6. AI-Layer Testing
 

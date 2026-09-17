@@ -1,29 +1,29 @@
 # PROJECT STATE
 
-Status: COMPLETE (Phase 02)
+Status: COMPLETE (Phase 03)
 
-Current phase: PHASE_03_DATA_PROFILING_VISUALIZATION
+Current phase: PHASE_04_ML_ENGINE
 
-Last completed phase: PHASE_02_DATA_INGESTION
+Last completed phase: PHASE_03_DATA_PROFILING_VISUALIZATION
 
-Current branch: phase/02-data-ingestion (branched from `origin/main` at `56ffd8d`, the
-human-merged Phase 01 baseline — `main` remains human-controlled; Phase 03 must branch
-fresh only after the human decides to merge/promote this branch, or from an explicit
-human-directed baseline)
+Current branch: phase/03-data-profiling-visualization (branched from `origin/main` at
+`cdd25f0`, the post-attribution-cleanup, Phase-02-merged baseline — `main` remains
+exclusively human-controlled; Phase 04 must branch fresh only after explicit human
+direction on the baseline to use)
 
 Next action:
-STOP. Phase 02 is complete, committed, and pushed to `origin/phase/02-data-ingestion`. Do
-not start Phase 03 automatically — wait for explicit human approval, then read
-`01_PHASES/PHASE_03_DATA_PROFILING_VISUALIZATION/PHASE_PROMPT.md` and follow the same
-lifecycle (DISCOVER → PLAN → IMPLEMENT → TEST → REVIEW → DOCUMENT → UPDATE STATE → COMMIT →
-PUSH → VERIFY → STOP) on a fresh branch per `GIT_WORKFLOW.md`. `main` is never touched,
-never merged into, by the agent.
+STOP. Phase 03 is complete, committed, and pushed to
+`origin/phase/03-data-profiling-visualization`. Do not start Phase 04 automatically — wait
+for explicit human approval, then read `01_PHASES/PHASE_04_ML_ENGINE/PHASE_PROMPT.md` and
+follow the same lifecycle (DISCOVER → PLAN → IMPLEMENT → TEST → REVIEW → DOCUMENT →
+UPDATE STATE → COMMIT → PUSH → VERIFY → STOP) on a fresh branch per `GIT_WORKFLOW.md`.
+`main` is never touched, never committed to, never merged into, by the agent.
 
 ## Phase status
 
 - [x] PHASE 01 — Foundation
 - [x] PHASE 02 — Data Ingestion
-- [ ] PHASE 03 — Data Profiling & Visualization
+- [x] PHASE 03 — Data Profiling & Visualization
 - [ ] PHASE 04 — ML Engine
 - [ ] PHASE 05 — AI Analytics
 - [ ] PHASE 06 — API + Frontend Integration
@@ -63,4 +63,25 @@ Do not mark a phase complete unless its Definition of Done is satisfied.
   storage with server-generated dataset ids (structural path-traversal defense); 50 MB
   upload limit + binary-content sniffing. 42/42 tests passing (34 new), Ruff-clean,
   verified end-to-end against a real running server. ADR-005 resolved, ADR-010 added. No
-  blockers. Full detail in `01_PHASES/PHASE_02_DATA_INGESTION/PHASE_REPORT.md`.
+  blockers. Full detail in `01_PHASES/PHASE_02_DATA_INGESTION/PHASE_REPORT.md`. Merged
+  into `main` by the human via PR #2 (`370cf4e`, later rewritten to `cdd25f0` by the
+  git-attribution cleanup — content identical, only commit metadata changed).
+- 2026-09-17 — GIT HISTORY ATTRIBUTION CLEANUP — n/a — main, phase/01-foundation,
+  phase/02-data-ingestion — cdd25f0 / 2590942 / 8e3a838 — Human-authorized rewrite removed
+  3 `Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>` trailers from commits
+  `91b7ca0`/`d08e461`/`989b5e1` (message-only change; every tree hash and author/committer
+  date verified byte-identical to the originals before push). Backed up first
+  (`backup/pre-claude-cleanup-*` local branches, never pushed, never deleted). Pushed with
+  `--force-with-lease` (never `--force`) after explicit human confirmation at each stage.
+  No project files altered.
+- 2026-09-17 — PHASE 03 — COMPLETE — phase/03-data-profiling-visualization — (hash
+  recorded in a follow-up entry, same reason as prior phases) — Deterministic data
+  profiling: dataset/column-level statistics (numeric/categorical/datetime), a
+  rule-based quality-findings engine (missing values, duplicates, constant/near-constant
+  columns, high-cardinality categoricals, mixed types, infinite values, unexpected
+  negatives, invalid dates), pairwise Pearson correlation with an explicit
+  insufficient-data status, and numpy-histogram distribution data — exposed via 5 new
+  `/api/v1/datasets/{id}/*` endpoints. 138/138 tests passing (96 new), 99% coverage on
+  `app/profiling/`, Ruff-clean, verified end-to-end against a real running server. No ML
+  or AI logic introduced (verified by grep). ADR-011 added. No blockers. Full detail in
+  `01_PHASES/PHASE_03_DATA_PROFILING_VISUALIZATION/PHASE_REPORT.md`.

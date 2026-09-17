@@ -134,13 +134,73 @@ explicitly configured a real provider (principle 4).
 
 **Backend** (`backend/`, created Phase 01):
 - `ingestion/` — upload, validation, storage (Phase 02)
-- `profiling/` — data quality engine + statistics (Phase 03)
+- `profiling/` — data quality engine + statistics (Phase 03) — see "Profiling
+  Architecture" below for its internal module breakdown
 - `ml/` — baseline model training/evaluation (Phase 04)
 - `ai/` — mode abstraction + implementations (Phase 05)
 - `api/` — thin FastAPI routers only; no business logic lives here
 
 No module reaches into another module's internals — only through its public interface
-(`00_AGENT_CONTROL/AGENT_MASTER_INSTRUCTIONS.md`).
+(`00_AGENT_CONTROL/AGENT_MASTER_INSTRUCTIONS.md`). `profiling/` reuses `ingestion/`'s
+`StorageService` through one small, deliberate addition to its existing public interface
+(`get_raw_file_path`) rather than building a second, incompatible dataset storage system.
+
+## Profiling Architecture (Phase 03)
+
+`app/profiling/` is split by responsibility, each piece independently unit-tested:
+
+- `errors.py` — `ProfilingError` (same `{code, message, status_code}` shape as
+  `ingestion.errors.IngestionError`, kept as an independent class per the module-isolation
+  rule above).
+- `schemas.py` — every Pydantic response model (`DatasetProfile`, `ColumnProfile`,
+  `QualitySummary`, `CorrelationResult`, `DistributionResult`, …). All fields are computed
+  facts; nothing here is or ever contains AI-generated text (that's Phase 05's job, wrapping
+  these payloads, never extending them).
+- `loader.py` — loads a dataset's `DataFrame` via `ingestion.StorageService`, re-reading
+  from disk on every call (no caching layer — a deliberate simplicity choice for a
+  local-first v1 with no dataset-size ceiling problem yet; revisit if profiling becomes a
+  hot path).
+- `column_types.py` — conservative, deterministic semantic-type classification
+  (numeric/boolean/datetime/categorical/text/unknown) layered on top of the raw pandas
+  dtype, never replacing it.
+- `numeric_stats.py` / `categorical_stats.py` / `datetime_stats.py` — per-type descriptive
+  statistics.
+- `column_profile.py` / `dataset_profile.py` — orchestration: per-column and whole-dataset
+  aggregation.
+- `quality.py` — deterministic data-quality findings (see below).
+- `correlation.py` — Pearson correlation between numeric column pairs.
+- `distribution.py` — histogram/binning data for numeric columns.
+
+**Numeric edge-case policy:** infinite values are excluded from descriptive statistics
+(min/max/mean/median/std/quartiles) — computed only over the finite subset — and reported
+separately as `infinite_count`, because `inf`/`-inf`/`NaN` are not valid JSON number
+tokens and letting one infinite value silently turn every statistic into `inf` would
+misrepresent an otherwise well-behaved column. Zero/negative counts are computed over all
+non-null values, since a `0` or `-inf` is still meaningfully zero/negative.
+
+**Quality check thresholds** (fixed, documented constants — not learned or guessed; see
+`decisions/DECISIONS_LOG.md` ADR-011): missing-value severity at 20%/50% (warning/
+critical), near-constant at ≥95% single-value share, high-cardinality categorical at >50%
+unique ratio, mixed-type detection at 10–90% numeric-coercible ratio, datetime detection at
+≥90% parse success.
+
+**Correlation strategy:** Pearson only; missing values handled *pairwise* per column pair
+(not one dataset-wide `dropna`, which would discard usable pairs unnecessarily); a
+configurable `minimum_observations` (default 3) below which a pair is skipped, not
+fabricated; an explicit `"insufficient_data"` status (with a human-readable `message`) when
+fewer than 2 numeric columns exist or every pair lacks enough overlapping data — never a
+failure, never a silently empty-looking success.
+
+**Distribution strategy:** `numpy.histogram` over each numeric column's finite values, with
+a fixed default of 10 bins; a column with no finite values or where every finite value is
+identical is reported in `skipped_columns` rather than emitting a degenerate or fabricated
+histogram; non-numeric and boolean columns are always skipped.
+
+**Edge cases handled explicitly, not silently:** a header-only (0-row) dataset profiles
+cleanly with an `empty_dataset` quality finding, not an error; a dataset with zero columns
+returns a `zero_columns` critical finding without attempting further checks; a dataset
+metadata record whose raw file has been removed or corrupted out-of-band raises a
+structured `dataset_unreadable`/`dataset_not_found` error, never a bare 500.
 
 ## Data Flow & the Computed/AI-Generated Contract
 

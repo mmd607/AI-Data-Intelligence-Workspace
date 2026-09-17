@@ -1,0 +1,11 @@
+age,category,signup_date,status
+25,A,2024-01-01,active
+30,B,2024-01-05,active
+,A,2024-01-10,inactive
+45,C,2024-02-01,active
+22,A,2024-02-15,active
+22,A,2024-02-15,active
+60,B,2024-03-01,inactive
+35,A,2024-03-10,active
+29,A,2024-03-20,active
+50,C,2024-04-01,active

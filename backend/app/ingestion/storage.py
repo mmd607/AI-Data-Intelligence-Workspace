@@ -39,6 +39,17 @@ class StorageService:
             return None
         return json.loads(path.read_text())
 
+    def get_raw_file_path(self, dataset_id: str) -> Path | None:
+        """Path to the stored raw file, or `None` if the dataset doesn't exist.
+
+        Added in Phase 03 so the profiling module can read the dataset directly (via
+        `pandas.read_csv`) without duplicating storage logic — accessed through this
+        public method, never by reaching into `StorageService`'s internals, per
+        `02_DOCS/ARCHITECTURE.md` "Module Boundaries".
+        """
+        path = self._dataset_dir(dataset_id) / "original.csv"
+        return path if path.exists() else None
+
     def list_metadata(self) -> list[dict]:
         if not self.base_dir.exists():
             return []
