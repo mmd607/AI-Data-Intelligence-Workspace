@@ -144,8 +144,8 @@ running server).
 
 ## Git
 
-Commits (on `phase/05-ai-analytics`): `feat(phase-05): implement grounded AI analytics
-layer`, followed by a small commit recording that hash back into this report and
+Commits (on `phase/05-ai-analytics`): `6c04869` — `feat(phase-05): implement grounded AI
+analytics layer`, followed by a small commit recording this hash back into this report and
 `PROJECT_STATE.md` (unavoidable, same reason as prior phases).
 
 Remote branch: `origin/phase/05-ai-analytics` — pushed and existence verified (see

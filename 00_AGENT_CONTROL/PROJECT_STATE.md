@@ -97,8 +97,8 @@ Do not mark a phase complete unless its Definition of Done is satisfied.
   against a real running server. XGBoost concretely benchmarked and not adopted (ADR-004
   finalized); ADR-013 added. No Phase 02/03 regression. No blockers. Full detail in
   `01_PHASES/PHASE_04_ML_ENGINE/PHASE_REPORT.md`.
-- 2026-09-18 — PHASE 05 — COMPLETE — phase/05-ai-analytics — TBD (recorded in a follow-up
-  commit) — Grounded AI analytics layer: provider abstraction (`offline` default /
+- 2026-09-18 — PHASE 05 — COMPLETE — phase/05-ai-analytics — 6c04869 — Grounded AI
+  analytics layer: provider abstraction (`offline` default /
   `anthropic` opt-in via direct `httpx` calls, no SDK / `disabled`, no silent fallback
   between them), 5 AI capabilities (dataset summary, quality explanation, column insight,
   correlation explanation, ML explanation), grounded natural-language Q&A with
