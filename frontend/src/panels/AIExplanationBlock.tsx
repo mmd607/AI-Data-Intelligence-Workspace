@@ -20,8 +20,8 @@ export function AIExplanationBlock({
   if (!explanation) return null;
 
   return (
-    <div className="mt-4 rounded-lg border border-accent/20 bg-accent/5 p-4">
-      <p className="mb-2 text-xs font-medium uppercase tracking-wide text-accent/80">
+    <div className="mt-4 rounded-lg border border-accent-secondary/20 bg-accent-secondary/5 p-4">
+      <p className="mb-2 text-xs font-medium uppercase tracking-wide text-accent-secondary/80">
         AI explanation — {explanation.provider}
         {explanation.model ? ` (${explanation.model})` : ""}
       </p>

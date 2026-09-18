@@ -22,6 +22,7 @@ export function WorkspaceLayout() {
         {state.status === "loading" && <LoadingSkeleton rows={1} />}
         <Tabs
           items={[
+            { to: `/datasets/${datasetId}/universe`, label: "Universe" },
             { to: `/datasets/${datasetId}`, label: "Overview", end: true },
             { to: `/datasets/${datasetId}/quality`, label: "Quality" },
             { to: `/datasets/${datasetId}/analytics`, label: "Analytics" },

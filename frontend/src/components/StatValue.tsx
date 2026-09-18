@@ -12,9 +12,9 @@ export function StatValue({
 }) {
   const display = value === null || value === undefined ? "—" : value;
   return (
-    <div className="flex flex-col gap-0.5">
+    <div className="flex min-w-0 flex-col gap-0.5">
       <span className="text-xs uppercase tracking-wide text-slate-500">{label}</span>
-      <span className="font-mono text-lg text-slate-100">
+      <span className="break-words font-mono text-lg text-slate-100">
         {display}
         {unit && display !== "—" ? <span className="ml-1 text-sm text-slate-500">{unit}</span> : null}
       </span>
