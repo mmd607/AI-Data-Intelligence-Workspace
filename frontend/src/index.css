@@ -9,5 +9,16 @@ body,
 }
 
 body {
-  @apply bg-surface text-slate-200 antialiased;
+  @apply bg-surface font-sans text-slate-200 antialiased;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

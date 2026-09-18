@@ -64,6 +64,12 @@ this document is the shared methodology and tooling behind it.
   empty/error states; the full ML configure→validate→train flow including a training
   error; the AI page's available/unavailable/evidence-display states; the Q&A panel's
   grounded-answer and unsupported-question states).
+- **Actual, measured (Phase 07):** 19 new test files, 98 new tests — all passing, zero
+  regression on the 33 Phase 06 tests (31 files, 131 tests total). See §4 below for the
+  breakdown; the exact same `useAsync`/mocked-`fetch` patterns from Phase 06 are reused for
+  every panel and `UniversePage` test, and every new pure-logic module (`mapping.ts`,
+  `layout.ts`, `tiers.ts`, `filtering.ts`, `visualState.ts`, `universeStore.ts`) is tested
+  directly, with no React/DOM rendering involved.
 - 🟡 ASSUMED, **not adopted this phase** — Playwright end-to-end tests. Phase 06's actual
   full-stack verification (real backend + real frontend dev server, the complete upload →
   overview → quality → analytics → ML → AI flow, including live model training and a
@@ -78,15 +84,43 @@ this document is the shared methodology and tooling behind it.
 
 ## 4. 3D-Specific Testing Approach
 
-The 3D Universe (Phase 07) is tested primarily through:
-- **Logic/state-transition tests** — node state machine (`UI_UX_SPEC.md` §4.2: idle → hover
-  → selected → loading → error → disabled), performance-tier selection logic, and
-  `prefers-reduced-motion` behavior are all pure/near-pure logic that can be unit-tested
-  without rendering WebGL.
+The 3D Universe (Phase 07) is tested primarily through, **as actually built and measured**:
+
+- **Logic/state-transition tests** (no rendering, no WebGL):
+  - `universe/mapping.test.ts` (16 tests) — deterministic graph construction from fixed
+    fixtures; proves zero fabricated edges/relationships (an `insufficient_data` correlation
+    status or a pair below `minimum_observations` never produces an edge); correct node
+    type/size/color/state derivation; the `PROFILE_FEATURE_CAP`/`ANALYTICS_PAIR_CAP` caps.
+  - `universe/layout.test.ts` (11 tests) — same input → same positions (determinism);
+    different dataset ids → different but stable seeds; zero-column edge case.
+  - `universe/visualState.test.ts` (6 tests) — the full node state-machine precedence table
+    (`UI_UX_SPEC.md` §4.2: error > loading > disabled > selected > hover > idle).
+  - `universe/tiers.test.ts` (10 tests) — performance-tier selection under mocked
+    `navigator`/viewport-width/WebGL-availability combinations, plus `prefers-reduced-
+    motion` behavior via a mocked `matchMedia`.
+  - `universe/filtering.test.ts` (8 tests) — search + each filter category + their
+    combination, against real field values only (never a client-invented threshold).
+  - `state/universeStore.test.ts` (8 tests) — every selection/hover/focus/filter/search/
+    view-mode transition, exercised directly against the Zustand store with no React needed.
+- **Component/integration tests** (React Testing Library, no Canvas/WebGL rendering
+  attempted — a mocked `universe/tiers.ts` forces the 2D-fallback code path so `UniversePage`
+  itself is exercised end-to-end without ever mounting a real `<Canvas>` in jsdom):
+  `UniverseErrorBoundary` (2 tests — a throwing child renders the fallback, the rest of the
+  app is unaffected), `UniverseFallback` (7 tests), `UniverseHUD`/`Search`/`Filters`/
+  `Legend` (9 tests), `UniversePage` (6 tests — loading/success/error wiring, dataset-core
+  and Escape-key selection, the mobile "Try 3D Universe" affordance), and one test file per
+  inspector panel — `DatasetPanel`/`FeaturePanel`/`QualityPanel`/`CorrelationPanel`/
+  `MLPanel`/`AIInsightPanel` (15 tests total) — against real fixture API responses, proving
+  every displayed value is the real one, never fabricated.
 - **Manual QA checklist** — a literal pass through `UI_UX_SPEC.md` §1's anti-goals and §4's
-  node/interaction requirements, performed and recorded (not just asserted) at Phase 07.
+  node/interaction requirements, performed against the real running app (real backend +
+  real frontend dev servers, a real uploaded dataset, real correlation/ML/AI results) and
+  recorded in `01_PHASES/PHASE_07_3D_UNIVERSE_UI/PHASE_REPORT.md`, not just asserted.
 - Full pixel-level 3D rendering tests are explicitly **not** pursued — low value relative to
-  cost.
+  cost, confirmed by this phase's own experience (jsdom has no WebGL/`ResizeObserver`
+  support; the first draft of the mobile-default test surfaced this directly — a genuine
+  one-frame flicker bug where `Canvas` briefly attempted to mount before a corrective effect
+  fired, found and fixed via the *logic*-level test, not a rendering test).
 
 ## 5. Data-Correctness Testing
 
@@ -145,10 +179,11 @@ The 3D Universe (Phase 07) is tested primarily through:
   including structured error paths (`column_not_found`, `ml_result_required`,
   `dataset_not_found`) and OpenAPI schema registration.
 
-A UI test will later confirm the computed vs. AI-generated visual distinction
-(`UI_UX_SPEC.md` §4.6) actually renders as two structurally different blocks, not just
-different CSS classes with identical layout — deferred to Phase 06/07 (frontend), out of
-scope for the backend-only Phase 05.
+✅ RESOLVED (Phase 06/07) — the computed vs. AI-generated visual distinction (`UI_UX_SPEC.md`
+§4.6) is confirmed to render as two structurally different blocks (not just different CSS
+classes) by every test that asserts on `AIExplanationBlock`'s "AI explanation — `<provider>`"
+label alongside a separately-rendered computed grid (`AiPage.test.tsx`, `QaPanel.test.tsx`,
+and Phase 07's `FeaturePanel.test.tsx`/`AIInsightPanel.test.tsx`).
 
 ## 7. Test Data & Fixtures Policy
 
