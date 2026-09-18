@@ -34,7 +34,7 @@ is fashionable"). Every dependency added beyond this baseline needs its own entr
 | React + TypeScript | Adopted | ✅ CONFIRMED | Right default for a component-heavy, stateful, long-lived app; TypeScript keeps the computed/AI-generated data contract type-safe end-to-end. |
 | Vite | Adopted | ✅ CONFIRMED | Fast dev loop, first-class React+TS template; no SSR/SEO requirement exists for this single-page tool. |
 | Tailwind CSS | Adopted | ✅ CONFIRMED | Fast, consistent utility styling for the 2D chrome; keeps the design-token system (`UI_UX_SPEC.md`) centralized. |
-| React Three Fiber + Three.js | Adopted | ✅ CONFIRMED | The Universe is not optional — it's the product's primary interface. R3F is the standard, well-maintained React binding, keeping the 3D scene declarative and testable at the state level. `@react-three/drei` is the standard helper library (camera controls, text, instancing) — 🟡 ASSUMED, confirmed in Phase 07. |
+| React Three Fiber + Three.js | Adopted | ✅ CONFIRMED | The Universe is not optional — it's the product's primary interface. R3F is the standard, well-maintained React binding, keeping the 3D scene declarative and testable at the state level. `@react-three/drei` is the standard helper library — ✅ CONFIRMED (Phase 07): `CameraControls` (camera focus/reset/zoom clamps), `Html` (billboard node labels), `Line` (dashed connection/correlation edges), `Stars` (high-tier atmosphere). No `@react-three/postprocessing` was added — see "Universe Architecture (Phase 07)". |
 | Data visualization library | **Hand-rolled SVG** (`frontend/src/viz/`), no charting dependency | ✅ CONFIRMED (Phase 06, supersedes the earlier visx assumption) | Phase 03 (backend-only) never actually exercised this decision, so it was still open going into Phase 06. Once real requirements were known (a fixed-bin histogram, a correlation-magnitude bar, a categorical frequency list — all driven by data the backend already computes/bins), they turned out small and fixed-shape enough that a general-purpose charting library's value (chart types, scales, interactions) wasn't needed. See ADR-015. Revisit if Phase 07 needs chart types this doesn't reasonably cover. |
 
 ### Backend
@@ -58,10 +58,14 @@ is fashionable"). Every dependency added beyond this baseline needs its own entr
 
 ### 3D Interaction & State
 
-- ✅ CONFIRMED — 3D scene state (node positions, selection, hover, focus/camera target) is
-  managed in a dedicated frontend state slice. Library choice 🟡 ASSUMED as **Zustand**
-  (lightweight, avoids re-render storms in a frequently-updating 3D scene) — confirmed in
-  Phase 07.
+- ✅ CONFIRMED (Phase 07) — 3D scene *interaction* state (selection, hover, focus, search,
+  filters, view mode) is managed in `frontend/src/state/universeStore.ts`, a **Zustand**
+  store (ADR-008, confirmed) — chosen over React Context for its granular per-field
+  subscription model: a component reading only `hoveredNodeId` doesn't re-render on every
+  `searchQuery` keystroke, which matters once dozens of nodes each read from the store every
+  frame. Node *positions* are not store state at all — they're derived, pure data from
+  `universe/layout.ts`/`universe/mapping.ts`, recomputed via `useMemo` from already-fetched
+  API responses, never stored redundantly.
 
 ### AI Mode Abstraction
 
@@ -127,14 +131,17 @@ explicitly configured a real provider (principle 4).
 ## Module Boundaries
 
 **Frontend** (`frontend/src/`, created Phase 01):
-- `universe/` — R3F scene, node components, camera, connection lines (Phase 07)
+- `universe/` — the mapping layer (`mapping.ts`, `layout.ts`), R3F scene components,
+  camera, connection lines, performance-tier detection, and the 2D fallback (Phase 07) —
+  see "Universe Architecture" below
 - `panels/` — inspector panel UI, computed/AI-generated visual distinction (Phase 06/07) —
-  see "Frontend Integration Architecture" below
+  see "Frontend Integration Architecture" and "Universe Architecture" below
 - `viz/` — 2D chart components, hand-rolled SVG (Phase 06; see ADR-015)
 - `api-client/` — the *only* module allowed to call the backend (Phase 01/06)
-- `state/` — per-dataset session context (Phase 06); Zustand for 3D scene state (Phase 07)
+- `state/` — per-dataset session context (Phase 06); Zustand for 3D scene *interaction*
+  state (Phase 07, see "3D Interaction & State" above)
 - `features/` — one directory per UX-flow step (upload, workspace, quality, analytics, ml,
-  ai) (Phase 06)
+  ai, universe) (Phase 06/07)
 - `components/` — reusable, feature-agnostic UI primitives (Phase 06)
 - `hooks/` — data-fetching hooks (`useAsync`/`useLazyAsync`) (Phase 06)
 
@@ -382,6 +389,83 @@ The 2D application wired up in this phase — the "List/Table" fallback view
   — no client-side binning or statistical recomputation. See ADR-015 for why no charting
   library was added.
 
+## Universe Architecture (Phase 07)
+
+The 3D "Data Intelligence Universe" is a presentation layer added on top of Phase 06's
+already-complete, already-tested 2D application — it introduces no new backend endpoint,
+no new computation, and no change to any existing route's behavior. `frontend/src/universe/`
+is split by responsibility, mirroring the backend's own `profiling/`/`ml/`/`ai/` pattern:
+
+- **`types.ts`** — the scene-agnostic domain model (`UniverseNode`/`UniverseEdge`/
+  `NodeVisualState`) the mapping layer produces and every renderer consumes. Plain data,
+  no Three.js/R3F import — `ARCHITECTURE.md`'s "the 3D scene should receive clean domain
+  objects" rule, enforced by file boundary.
+- **`mapping.ts`** — `buildUniverseGraph()`: a pure, synchronous function turning already-
+  fetched `DatasetMetadata`/`DatasetProfile`/`QualitySummary`/`CorrelationResult`/
+  `ModelResult`/`AIStatusResponse` into a `UniverseGraph`. No `fetch` call lives here or
+  anywhere under `universe/` — `features/universe/UniversePage.tsx` is the only place that
+  calls the API client, via the same `useAsync`/`useLazyAsync` hooks every other page uses.
+  Every node/edge field traces to a real response field; nothing is invented (see §4.1/ADR-
+  016 for the exact node taxonomy and visual-encoding rules this function implements).
+- **`layout.ts`** — deterministic spatial placement (FNV-1a hash + a mulberry32 PRNG step
+  seed a per-dataset rotation offset for the golden-angle feature-ring spiral; domain-node
+  positions are a fixed function of a constant ordering, no seed needed). Same input always
+  produces the same positions — no `Math.random()` anywhere in this file.
+- **`tiers.ts`** — `detectPerformanceTier()` and `usePrefersReducedMotion()`: the concrete,
+  testable logic behind §4.7/§6/§9's performance-tier and reduced-motion resolutions.
+- **`visualState.ts`** — `resolveNodeVisualState()`: combines a node's structural baseline
+  (`available`/`error`, from the mapping layer) with interaction-time state (hover/
+  selection/loading, from the store) into the single state every node renders, per a fixed
+  precedence (§4.2). Kept separate from `mapping.ts` so the mapping layer stays interaction-
+  free and this precedence logic is independently unit-testable without React or WebGL.
+- **`filtering.ts`** — `filterFeatureNodes()`/`hasActiveFilters()`: pure search/filter logic
+  shared by the 3D scene, the 2D fallback, and `features/universe/Search.tsx`/`Filters.tsx`,
+  so all three narrow the identical feature set consistently.
+- **`sceneTokens.ts`** — the single source of truth for 3D material colors, mirroring
+  `tailwind.config.js`'s 2D tokens (Three.js materials need real hex values, not Tailwind
+  classes) — the concrete implementation of "every visual encoding must be documented and
+  consistent" (§26).
+- **`UniverseScene.tsx`** / **`DatasetCoreNode.tsx`** / **`DomainNode.tsx`** /
+  **`FeatureNode.tsx`** / **`CorrelationEdge.tsx`** / **`SceneLine.tsx`** /
+  **`NodeLabel.tsx`** / **`useFloat.ts`** — the R3F scene itself: `Canvas` + lighting +
+  `CameraControls` + node/edge meshes, each a thin renderer over the domain model above.
+  Click/hover handlers only ever call `state/universeStore.ts` actions — no business logic
+  lives in a scene component.
+- **`UniverseErrorBoundary.tsx`** — a class-component error boundary scoped to the Universe
+  page only: a render error anywhere inside the Canvas swaps in the 2D fallback with an
+  explanatory message, without affecting any other tab (`errorHandling` requirement, phase
+  brief §38).
+- **`UniverseFallback.tsx`** — the 2D list/table view built from the identical
+  `UniverseGraph`: a dataset summary, a domain grid (linking into the real Quality/
+  Analytics/ML/AI tabs), a searchable/filterable feature table, and a correlation list —
+  full data parity with the 3D scene, only the spatial metaphor is dropped (§3/§4.7).
+- **`features/universe/UniversePage.tsx`** — orchestration: fetches profile/quality/
+  correlation via `useAsync` (the same contract as every other page), reads the session's
+  `lastMlResult` (`state/DatasetSessionContext.tsx`, unchanged from Phase 06) and AI status,
+  builds the graph via `useMemo`, resolves the performance tier and the Scene-vs-Fallback
+  branch, and hosts `UniverseHUD.tsx` (Search/Filters/Legend/Reset View/2D-3D toggle) and
+  `panels/DetailPanel.tsx` (the shared slide-in shell, Framer Motion — already a project
+  dependency, no new one added).
+- **`panels/{DatasetPanel,FeaturePanel,QualityPanel,CorrelationPanel,MLPanel,
+  AIInsightPanel}.tsx`** — the six inspector panels (§15/§16), each thin: they receive
+  already-fetched data as props (no duplicated fetch/compute logic against the same
+  endpoints `UniversePage` already called) and reuse `components/{Card,Badge,StatValue}.tsx`
+  plus `panels/{AIExplanationBlock,EvidenceSources}.tsx` verbatim, preserving the computed-
+  vs-AI-generated visual contract Phase 06 already built. `AIInsightPanel.tsx` is the one
+  exception with its own AI call (`analyzeDatasetSummary`) — a single representative
+  capability offered inline, with a link to the full 5-capability + Q&A `/ai` tab rather
+  than duplicating it.
+
+**Code-splitting:** `App.tsx` lazy-loads `UniversePage` (`React.lazy` + `Suspense`) — three.js/
+`@react-three/fiber`/`@react-three/drei` are a genuinely large dependency (confirmed by
+`vite build`'s own chunk-size warning: ~1.05 MB before splitting) that only the Universe tab
+needs. After splitting, the main bundle is ~215 KB and the Universe chunk (~1.05 MB, loaded
+only on demand) is separate — a real, measured performance improvement, not a guess.
+
+**Only new runtime dependency: `zustand`** (ADR-008, resolved). No `@react-three/
+postprocessing`, no new charting/animation library — see §4.7 above for why post-processing
+was deliberately not added, and ADR-016 for the full dependency-discipline reasoning.
+
 ## Data Flow & the Computed/AI-Generated Contract
 
 Flow: `upload → validate → store → profile → statistics → (optional) ML → (optional) AI
@@ -454,9 +538,15 @@ alongside its use.
 - **Risk:** visx's lower-level API may slow down Phase 03 delivery relative to a
   higher-level chart library; mitigated by the documented fallback and by acceptance
   criteria not being tied to a specific library, only to correctness and visual quality.
-- **Risk:** the "premium, not decorative" 3D bar (principle 6) is inherently more
-  subjective than a functional requirement; mitigated by the concrete node/state/anti-goal
-  checklist in `UI_UX_SPEC.md`, used as literal acceptance criteria in Phase 07.
+- **Risk (resolved, Phase 07):** the "premium, not decorative" 3D bar (principle 6) was
+  inherently more subjective than a functional requirement; mitigated by the concrete node/
+  state/anti-goal checklist in `UI_UX_SPEC.md` §1/§4, run as a recorded manual QA pass — see
+  `01_PHASES/PHASE_07_3D_UNIVERSE_UI/PHASE_REPORT.md` for the actual checklist result.
+- **Risk (accepted, Phase 07):** correlation edges are not individually clickable inside the
+  3D scene (thin-line raycasting at a distance is unreliable); mitigated by
+  `panels/CorrelationPanel.tsx` giving the identical pairs/coefficients in 2D from the
+  Analytics domain node — an explicit "3D for spatial context, 2D for precision" trade-off,
+  not an oversight.
 
 ---
 *Related: [PRODUCT_SPEC.md](PRODUCT_SPEC.md) · [UI_UX_SPEC.md](UI_UX_SPEC.md) ·

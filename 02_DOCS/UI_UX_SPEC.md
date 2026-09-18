@@ -30,18 +30,22 @@ acceptance):
 
 ## 2. Visual Language
 
-- **Color:** a dark neutral base (near-black to deep charcoal, not pure `#000`) with **one**
-  primary accent color and **one** secondary accent, used sparingly for interactive/active
-  states, not decoration. Semantic states (good/warning/critical data-quality signals) use
-  desaturated, low-luminance variants of standard hues (green/amber/red) rather than
-  saturated neon equivalents. Exact hex values are ❓ OPEN QUESTION, deferred to a dedicated
-  design-token pass at the start of Phase 07 (🟡 ASSUMED to live in a design-tokens file /
-  Tailwind config, not hardcoded per component).
-- **Typography:** a modern technical sans-serif for UI text (🟡 ASSUMED: Inter or
-  comparable) and a monospace face for all numeric/data values (🟡 ASSUMED: JetBrains Mono
-  or comparable) — the sans/mono split reinforces "technically oriented" and gives computed
-  numbers a distinct visual identity from prose, reinforcing the computed-vs-AI-explanation
-  separation (product principle 2) typographically as well as structurally (§4.6).
+- **Color:** ✅ CONFIRMED (Phase 07, `frontend/tailwind.config.js`) — a dark neutral base
+  (`surface.DEFAULT #0a0b0f`, `surface.raised #12151c`, not pure `#000`) with **one**
+  primary accent (`accent.DEFAULT #6ee7ff`, cyan — unchanged since Phase 01) used for the
+  dataset core and every deterministic domain/feature node, and **one** secondary accent
+  (`accent.secondary #a78bfa`, violet) reserved *exclusively* for AI-generated/AI-sourced
+  content (the AI Insights node and `panels/AIExplanationBlock.tsx`) — never used for
+  computed data, a deliberate spatial reinforcement of product principle 2. Semantic
+  good/warning/critical states reuse Tailwind's own desaturated emerald/amber/rose scales
+  at low opacity (`components/Badge.tsx`'s Phase-06 pattern) rather than new hexes — already
+  satisfies "desaturated, low-luminance, never saturated neon."
+- **Typography:** ✅ CONFIRMED (Phase 07) — Inter (sans, UI text) and JetBrains Mono (mono,
+  every numeric/data value), loaded via a Google Fonts `<link>` in `index.html` (no new npm
+  dependency) and wired as `fontFamily.sans`/`fontFamily.mono` in `tailwind.config.js`. The
+  sans/mono split reinforces "technically oriented" and gives computed numbers a distinct
+  visual identity from prose, reinforcing the computed-vs-AI-explanation separation
+  (product principle 2) typographically as well as structurally (§4.6).
 - **Depth & elevation:** subtle blur/translucency (glass-panel effect) and layering, not
   heavy borders or drop shadows.
 - **Iconography:** minimal line icons, single stroke weight, no filled/cartoon icon sets.
@@ -60,27 +64,49 @@ acceptance):
   for data access; only the spatial/navigational metaphor is lost. ✅ BUILT (Phase 06) —
   `frontend/src/features/`, real backend data throughout the upload → overview → quality →
   analytics → ML → AI flow; Phase 07 adds the 3D layer on top/in front of it.
+- **Universe tab placement** — ✅ CONFIRMED (Phase 07): the Universe is a new "Universe" tab
+  (`/datasets/:id/universe`), added as the *first* tab in `WorkspaceLayout`'s existing tab
+  bar rather than replacing the Overview index route. This was a deliberate choice: it makes
+  the Universe the immediately-discoverable flagship entry point (matching "primary surface"
+  in spirit) while keeping every one of Phase 06's already-tested routes/behavior completely
+  unchanged (zero regression risk) — the tab bar itself *is* the "2D fallback always
+  reachable" requirement made concrete, since every other tab remains one click away at all
+  times, from inside the Universe or outside it.
 
 ## 4. The Data Intelligence Universe
 
 ### 4.1 Node Taxonomy & Hierarchy
 
-✅ CONFIRMED node types, matching the ZIP's own Phase 07 concept diagram, arranged as a
-hybrid hierarchy/graph (a hub of orbiting nodes, not a flat unstructured graph):
+✅ CONFIRMED, finalized in Phase 07 (`frontend/src/universe/mapping.ts`) as a 4-level
+hierarchy — an intentional extension of the ZIP's own 2-level concept diagram, made
+concrete once the exact backend capabilities and real dataset structure were known to map
+against (see ADR-016):
 
-- **Dataset node** — the center of the scene (the ZIP's diagram centers "DATASET"; when
-  multiple datasets exist, each gets its own dataset-centered cluster reachable from a
-  workspace-level entry point).
-- Orbiting the dataset node:
-  - **Data Profile node**
-  - **Data Quality node**
-  - **Statistics node**
-  - **Visualization node**
-  - **ML node**
-  - **AI Insights node**
+- **Level 1 — Dataset core** — the center of the scene, one per dataset workspace.
+- **Level 2 — Domain nodes (5, fixed)**, orbiting the core: **Data Profile**, **Data
+  Quality**, **Analytics**, **ML**, **AI Insights**. This is a deliberate, documented
+  deviation from the ZIP's original 6-item list ("Statistics" and "Visualization" as
+  separate nodes): Phase 06 already merged both into one `AnalyticsPage` (correlation +
+  distribution) because there is no second, distinct backend capability behind them — two
+  separate 3D nodes would either duplicate one domain's content or be partly decorative,
+  which principle 6 forbids. Each domain node's `available`/`disabled` state reflects real
+  data presence (e.g. the ML node is disabled until a model has actually been trained this
+  session; the AI node reflects the real `AIStatusResponse.available`), never a guess.
+- **Level 3 — Feature nodes**, one per dataset column, populating a ring around whichever
+  domain node is focused (Profile or Analytics) rather than rendering all at once — the
+  large-dataset strategy (§11). Visual encoding, fixed and documented (`universe/
+  sceneTokens.ts`, the in-app `Legend`): **color** → `semantic_type`; **size** → normalized
+  missingness (`null_percentage`) — the one, non-conflicting size meaning; a red tint marks
+  a real `critical` quality finding on that column.
+- **Level 4 — Correlation edges**, only from real `CorrelationResult.pairs` when
+  `status === "computed"` (capped to the strongest 30 by `|coefficient|` — `ANALYTICS_
+  PAIR_CAP`, ADR-016): edge thickness → normalized `|coefficient|`, edge color → sign,
+  labeled "correlation" everywhere, never "cause." `insufficient_data` renders zero edges,
+  with the real reason surfaced in the Analytics panel instead of a fabricated relationship.
 
-This hierarchy is intentional: it keeps the scene legible (principle 6) by grouping related
-information spatially rather than scattering all nodes into one undifferentiated graph.
+This hierarchy keeps the scene legible (principle 6) by grouping related information
+spatially and by progressive disclosure (a feature ring only appears once its domain is
+focused) rather than scattering every node into one undifferentiated graph.
 
 ### 4.2 Node Visual States
 
@@ -97,30 +123,57 @@ Every node must implement all of the following states (✅ CONFIRMED minimum sta
 
 ### 4.3 Connections
 
-Animated lines/curves connect the dataset node to each child node, with a subtle
-directional flow animation indicating the relationship is "alive," not static geometry
-(reinforces principle 6). Non-selected connections are dimmed; connections touching the
-selected/hovered node are highlighted. ✅ CONFIRMED.
+Dashed lines/curves connect the dataset node to each domain node and, within the Analytics
+ring, feature nodes to each other via real correlation edges — reading as "a relationship,"
+not static wireframe geometry (reinforces principle 6). Non-selected connections are
+dimmed; connections touching the selected/hovered node are highlighted. ✅ CONFIRMED.
+
+A per-frame animated dash-offset ("flow") was deliberately not built: the phase's own
+"Performance" requirement ("avoid ... expensive effects") outweighs a purely decorative
+animation here, and the hover/selection highlight already communicates "alive" without a
+continuous render cost. Correlation edges themselves are not individually clickable in the
+3D scene (thin `Line2` geometry is an unreliable raycast target at a distance); clicking the
+Analytics domain node opens the same exact pairs/coefficients in 2D
+(`panels/CorrelationPanel.tsx`) instead — a direct application of this phase's own
+"3D is for spatial context, 2D is for precise information" principle, not a gap.
 
 ### 4.4 Camera & Motion
 
 - Orbit controls with damping (smooth, not snappy) for free navigation. ✅ CONFIRMED
-  ("smooth camera movement" per the ZIP's Phase 07 prompt).
+  ("smooth camera movement" per the ZIP's Phase 07 prompt) — implemented with
+  `@react-three/drei`'s `CameraControls` (`universe/UniverseScene.tsx`), not raw
+  `OrbitControls`: it gives built-in eased `setLookAt()` transitions and `minDistance`/
+  `maxDistance` clamps in one component, which is exactly what "focus a node" and "prevent
+  extreme zoom" (§12) need.
 - Selecting a node triggers an eased camera transition toward a framing of that node (a
-  "focus" state), with a clear way back to the overview — 🟡 ASSUMED exact interaction,
-  finalized in Phase 07, but the *requirement* for a focus/overview cycle is ✅ CONFIRMED.
+  "focus" state), with a clear way back to the overview via the "Reset View" HUD control —
+  ✅ CONFIRMED (Phase 07). `smoothTime` is set to `0` (an instant cut, not eased) whenever
+  `prefers-reduced-motion` is set, per §5/§27.
 - No aggressive parallax, no camera shake, no auto-rotating "showcase" mode by default —
   motion must always be either user-driven or state-driven (loading/selection), never
   ambient spectacle.
 
 ### 4.5 Interaction Model
 
-- Click: select node → opens inspector panel (matches ZIP's "Clicking a node opens its
-  corresponding detailed workspace").
-- Drag: orbit camera. Scroll/pinch: zoom. Hover: tooltip + highlight/focus state.
-- Double-click empty space / explicit "back" control: return to overview framing.
-- Keyboard: full tab-order navigation through nodes as an accessibility fallback (§5) —
-  ✅ CONFIRMED as a requirement, exact key bindings 🟡 ASSUMED, finalized in Phase 07.
+- Click: select (and focus/camera-ease toward) a node → opens the inspector panel (matches
+  ZIP's "Clicking a node opens its corresponding detailed workspace"). ✅ BUILT.
+- Drag: orbit camera (`CameraControls`). Scroll/pinch: zoom, clamped `minDistance`/
+  `maxDistance` (§12). Hover: label + highlight state, plus the touching connection
+  line(s) brighten. ✅ BUILT.
+- Explicit "Reset View" HUD control returns to the overview framing — ✅ BUILT, chosen over
+  "double-click empty space" as the *only* return-to-overview affordance: a single always-
+  visible, discoverable, keyboard-reachable button is more accessible and less ambiguous
+  than an empty-space gesture, and the phase brief itself explicitly asks for a visible
+  "Reset View" control (§12).
+- Keyboard: `Escape` clears the current selection/focus (closes the inspector panel) from
+  anywhere on the page — ✅ BUILT. Full tab-order navigation *through individual 3D nodes*
+  was not built — WebGL mesh objects have no native DOM tab stops, and building a parallel
+  synthetic tab-order over Three.js objects was judged not worth the complexity given §5's
+  own resolution: the 2D fallback view (search, filter chips, domain cards, a real
+  `<table>`, every panel) is the actual, fully keyboard-and-screen-reader-navigable path for
+  this data, exercised with real semantic HTML throughout — not a degraded second-class
+  experience for *data access*, only for the spatial metaphor, exactly as §5 already commits
+  to.
 
 ### 4.6 Information Panels — Computed vs. AI-Generated
 
@@ -141,15 +194,26 @@ section ("Avoid unnecessary re-renders, huge particle counts, and expensive effe
 Measure/inspect performance and document trade-offs") and "responsive fallback for
 low-performance devices":
 
-- **Capability detection** on load determines a performance tier:
-  - **High tier:** full effect set (subtle bloom only if it doesn't reduce text contrast,
-    full node count, smooth 60fps target).
-  - **Mid tier:** reduced particle/effect count, no post-processing, same node count.
-  - **Low tier / no WebGL:** automatic fallback to the 2D List/Table view (§3), same data,
-    same inspector panels — zero functional loss, only the spatial metaphor is dropped.
-- Heavy post-processing (depth-of-field, screen-space reflections, heavy bloom) is not used
-  by default at any tier. Exact tier thresholds are 🟡 ASSUMED, finalized with real
-  profiling in Phase 07.
+- **Capability detection** (`universe/tiers.ts::detectPerformanceTier`) on load determines
+  a performance tier — ✅ CONFIRMED, concrete thresholds finalized in Phase 07 (ADR-016):
+  - **High tier** (viewport ≥1280px, `navigator.hardwareConcurrency` >4 or unknown): full
+    feature-node cap (60), a subtle starfield (`drei`'s `Stars`) and fog, `CameraControls`
+    damping on.
+  - **Mid tier** (768–1279px viewport, or `hardwareConcurrency` ≤4): feature-node cap
+    lowered to 30, no starfield/fog, same node types and interactions.
+  - **Low tier / no WebGL** (a throwaway `canvas.getContext('webgl')` probe fails, or
+    viewport <768px by default — see §6): the Canvas never mounts at all; the 2D List/Table
+    view (§3) renders instead, built from the identical `UniverseGraph` data — zero
+    functional loss, only the spatial metaphor is dropped.
+- No post-processing library is used at any tier (no `@react-three/postprocessing`
+  dependency was added) — "glow" is achieved with `meshStandardMaterial` emissive
+  intensity + the renderer's own tone mapping, which is enough to read as "premium" without
+  the bloom/depth-of-field/screen-space-reflection cost the phase brief explicitly warns
+  against.
+- A render error thrown anywhere inside the Canvas is caught by `universe/
+  UniverseErrorBoundary.tsx` and swaps in the same 2D fallback with an explanatory banner —
+  the rest of the application (every other tab) is unaffected, since the boundary is scoped
+  to the Universe page only.
 
 ## 5. Accessibility
 
@@ -165,10 +229,14 @@ low-performance devices":
 
 ## 6. Responsive Behavior
 
-Desktop is the primary target. 🟡 ASSUMED — tablet gets a reduced-complexity 3D scene (mid
-tier by default); mobile defaults straight to the 2D List/Table view with the 3D Universe
-available on-demand rather than automatically, given the poor fit between orbit controls
-and small touchscreens. Finalized in Phase 07.
+✅ CONFIRMED (Phase 07). Desktop is the primary target. Tablet (768–1279px) gets the
+reduced-complexity mid-tier 3D scene by default. Mobile (<768px, `universe/tiers.ts`'s
+`MOBILE_WIDTH_BREAKPOINT`) defaults to the 2D List/Table view rather than the 3D Universe,
+given the poor fit between orbit controls and small touchscreens — but this is a *default*,
+not a lock: a visible "Try 3D Universe" control (`features/universe/UniversePage.tsx`)
+switches into the 3D scene on demand whenever WebGL is actually available, and the choice
+is only re-applied once per page load (a later resize/rotation never silently overrides an
+explicit user choice).
 
 ## 7. Component Inventory (2D chrome)
 
@@ -190,14 +258,15 @@ frontend principle); concrete designs produced per-phase as each view is built.
 
 ## 9. Open Questions
 
-- ❓ Exact color palette (hex values) — Phase 07.
-- ❓ Exact typography choice confirmation (Inter/JetBrains Mono are placeholders) — Phase 07.
-- ❓ Exact motion timing/easing curves — Phase 07.
-- ❓ Exact performance-tier thresholds — Phase 07.
-- ❓ Mobile 3D-on-demand interaction details — Phase 07.
+All resolved in Phase 07:
 
-None of the above block Phases 01–06; they must be resolved before Phase 07's acceptance
-criteria can be checked off.
+- ✅ RESOLVED — exact color palette: §2, `frontend/tailwind.config.js`, ADR-016.
+- ✅ RESOLVED — typography: Inter/JetBrains Mono confirmed (not placeholders), §2.
+- ✅ RESOLVED — motion timing/easing: `CameraControls`'s `smoothTime` (0.4s eased, 0s under
+  `prefers-reduced-motion`), the idle-float amplitude/speed constants in `universe/
+  useFloat.ts`, and the `DetailPanel` slide-in transition (0.22s `easeOut`) — see ADR-016.
+- ✅ RESOLVED — performance-tier thresholds: §4.7, `universe/tiers.ts`.
+- ✅ RESOLVED — mobile 3D-on-demand interaction: §6.
 
 ---
 *Related: [PRODUCT_SPEC.md](PRODUCT_SPEC.md) · [ARCHITECTURE.md](ARCHITECTURE.md) ·

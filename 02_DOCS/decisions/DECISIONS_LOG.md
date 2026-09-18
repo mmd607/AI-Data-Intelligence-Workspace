@@ -301,27 +301,42 @@ None yet — the interface does not depend on this choice.
 
 # ADR-008: 3D Scene State Management
 
-**Date:** 2026-09-17
-**Status:** 🟡 ASSUMED — final decision due Phase 07
+**Date:** 2026-09-17 (opened) / 2026-09-18 (resolved, Phase 07)
+**Status:** ✅ CONFIRMED
 **Phase:** PHASE_07_3D_UNIVERSE_UI
 
 ## Context
 The 3D scene has frequently-updating state (hover, selection, camera focus) that must not
 cause unnecessary re-renders across the whole component tree.
 
-## Decision (working assumption only)
-Zustand, chosen over React Context for its more granular subscription model.
+## Decision
+Zustand (`frontend/src/state/universeStore.ts`), chosen over React Context for its more
+granular subscription model — confirmed with real implementation experience. The store holds
+only interaction state (`selectedNodeId`, `hoveredNodeId`, `focusedNodeId`, `searchQuery`,
+`filters`, `viewMode`); node *positions* are never store state — they're derived, pure data
+from `universe/layout.ts`/`universe/mapping.ts`, recomputed via `useMemo` from already-
+fetched API responses. This split (interaction state in Zustand, domain data as plain
+derived data) matches this project's existing convention of never duplicating server state
+in a client store (`state/DatasetSessionContext.tsx`'s same principle, Phase 06).
 
 ## Alternatives Considered
 - **React Context** — set aside as a default: prone to over-rendering for
-  frequently-updating state unless carefully split.
+  frequently-updating state unless carefully split. Confirmed in practice: a `Search`/
+  `Filters` component reading only `searchQuery`/`filters` doesn't re-render on every
+  `hoverNode()` call during scene interaction, which a single Context value would not give
+  for free without manual memoization.
+- **Storing node positions/graph data in the store too** — rejected: it would duplicate data
+  already derivable from the fetched API responses via `buildUniverseGraph()`, creating a
+  second source of truth that could drift; kept as plain `useMemo`'d data in
+  `UniversePage.tsx` instead.
 
 ## Consequences
-None yet — confirmed with real implementation experience in Phase 07.
+Adding new interaction-state fields (e.g. a future multi-select) is a small, additive change
+to `universeStore.ts`'s shape — no architectural change needed.
 
 ## Related
-`../ARCHITECTURE.md` "3D Interaction & State";
-`../../01_PHASES/PHASE_07_3D_UNIVERSE_UI/PHASE_PROMPT.md`.
+`../ARCHITECTURE.md` "3D Interaction & State", "Universe Architecture (Phase 07)";
+`../../01_PHASES/PHASE_07_3D_UNIVERSE_UI/PHASE_PROMPT.md`; ADR-016.
 
 ---
 
@@ -695,3 +710,97 @@ snapshot as part of CI) is a natural, additive change to `api-client/`, not a re
 `../ARCHITECTURE.md` "Stack Evaluation" → "Frontend" (visx entry, superseded here),
 "Module Boundaries"; `../../01_PHASES/PHASE_06_API_FRONTEND_INTEGRATION/PHASE_REPORT.md`;
 `frontend/src/api-client/`, `frontend/src/viz/`, `frontend/src/state/`.
+
+---
+
+# ADR-016: Universe Node Taxonomy, Visual Encoding, Layout & Performance Tiers
+
+**Date:** 2026-09-18
+**Status:** ✅ CONFIRMED
+**Phase:** PHASE_07_3D_UNIVERSE_UI
+
+## Context
+`01_PHASES/PHASE_07_3D_UNIVERSE_UI/PHASE_PROMPT.md` and `02_DOCS/UI_UX_SPEC.md` §4 specify
+the Universe's *minimum* node taxonomy (dataset + 6 domain nodes) and require every visual
+encoding to be fixed and documented, but leave the concrete hierarchy depth, exact visual
+mappings, layout algorithm, and performance-tier thresholds to this phase, per §9's open
+questions. The conversation's own Phase 07 brief additionally asked for a deeper 4-level
+hierarchy (dataset → domains → features → relationships), search, filters, and a legend —
+consistent with, and a superset of, `UI_UX_SPEC.md`'s confirmed minimum, not a conflict.
+
+## Decision
+
+- **5 domain nodes, not 6:** Profile, Quality, Analytics, ML, AI. `UI_UX_SPEC.md`'s original
+  list separated "Statistics" and "Visualization," but Phase 06 already merged both into one
+  `AnalyticsPage` (correlation + distribution) — there is no second, distinct backend
+  capability to justify a second 3D node, and a duplicate/empty node would itself violate
+  principle 6 ("no unnecessary 3D objects"). Documented as a deviation in `UI_UX_SPEC.md`
+  §4.1, not a silent change.
+- **Feature nodes populate progressively, not all at once:** one ring per domain (Profile,
+  Analytics), appearing only once that domain node is focused/selected, capped at
+  `PROFILE_FEATURE_CAP=60` / `ANALYTICS_PAIR_CAP=30` correlation pairs
+  (`universe/mapping.ts`). This is the large-dataset handling strategy (phase brief §11) —
+  simpler than clustering/LOD, and the 2D fallback's search/table remains the uncapped,
+  complete view for any dataset with more columns than the cap.
+- **Fixed visual encodings, one meaning per property, documented in-app (`Legend.tsx`) and
+  in code (`universe/sceneTokens.ts`):**
+  - Feature-node **color** → `semantic_type` (numeric/categorical/boolean/datetime/text/
+    unknown), one swatch each.
+  - Feature-node **size** → normalized missingness (`null_percentage`) — the single size
+    meaning; no second, conflicting property ever drives size.
+  - Correlation-edge **thickness** → normalized `|coefficient|`; **color** → sign (never
+    implies causation — every label says "correlation").
+  - The **secondary accent** (violet) is reserved exclusively for AI-sourced content (the
+    AI domain node, `AIInsightPanel`, `AIExplanationBlock`) — never used for deterministic
+    data, making principle 2's computed-vs-AI-generated separation visible spatially.
+- **Deterministic layout, no `Math.random()`:** domain-node positions are a fixed function
+  of a constant ordering (no seed needed — they never depend on data); feature-ring
+  positions use a golden-angle "sunflower" spiral rotated by a per-dataset deterministic
+  seed (FNV-1a hash of `dataset_id` + domain, fed into a mulberry32 PRNG step) — the same
+  dataset always renders identically; different datasets look visually distinct.
+- **Performance tiers, concrete thresholds (`universe/tiers.ts`):** no-WebGL or viewport
+  <768px → 2D fallback only (Canvas never mounts); 768–1279px viewport or
+  `hardwareConcurrency` ≤4 → mid tier (30-node cap, no fog/starfield); ≥1280px and capable →
+  high tier (60-node cap, starfield + fog). No post-processing library at any tier — "glow"
+  comes from `meshStandardMaterial` emissive intensity alone.
+- **No per-frame animated connection "flow":** dashed static lines instead of an animated
+  dash-offset, per the phase's own "Performance" priority outweighing a purely decorative
+  effect; hover/selection highlighting already communicates "this connection is real."
+- **Correlation edges are not individually clickable in 3D:** thin-line raycasting at
+  distance is an unreliable click target; the Analytics domain node's 2D panel
+  (`panels/CorrelationPanel.tsx`) gives the identical pairs/coefficients precisely instead —
+  a direct application of "3D for spatial context, 2D for precision," not a gap. This also
+  meant ADR-015's anticipated "force-directed graph layout for the 2D fallback" never
+  materialized as a real need — a plain table/list was sufficient once the actual
+  requirement (search + exact values) was known, so no charting dependency was added.
+- **Universe tab, not a route replacement:** added as a new first tab
+  (`/datasets/:id/universe`) in `WorkspaceLayout`, not a replacement of the Overview index
+  route — every Phase 06 route/test stays unchanged (see `ARCHITECTURE.md` "Universe
+  Architecture (Phase 07)").
+- **Code-split via `React.lazy`:** three.js/R3F/drei only load when the Universe tab is
+  opened — confirmed by a measured build-size drop (main bundle ~1.26 MB → ~215 KB, Universe
+  chunk ~1.05 MB loaded on demand), not a guess.
+
+## Alternatives Considered
+- **Render every feature node and every correlation pair unconditionally** — rejected: for
+  a wide dataset this is exactly the "hundreds/thousands of unnecessary 3D objects" the
+  phase brief warns against; progressive disclosure + caps were chosen instead.
+- **A learned/heatmap-style correlation color gradient** — rejected: a single Pearson
+  coefficient doesn't carry enough precision to justify a gradient implying more nuance than
+  the number has; a two-color sign encoding plus the exact number in the 2D panel is honest
+  about what the statistic actually says.
+- **`@react-three/postprocessing` for bloom** — rejected: the phase brief explicitly says
+  heavy post-processing isn't used by default at any tier; emissive materials achieve a
+  "premium glow" look without the dependency or the runtime cost.
+- **Zustand-stored node positions** — rejected; see ADR-008.
+
+## Consequences
+Every visual encoding is a named constant in `universe/sceneTokens.ts`/`universe/mapping.ts`,
+cross-referenced from this ADR and from the in-app `Legend` — a future phase or a human
+adjusting one should update the constant, the Legend copy, and this record together, not
+just the code (mirrors the pattern ADR-011 established for profiling thresholds).
+
+## Related
+`../ARCHITECTURE.md` "Universe Architecture (Phase 07)"; `../UI_UX_SPEC.md` §4, §9;
+`../../01_PHASES/PHASE_07_3D_UNIVERSE_UI/PHASE_PROMPT.md`;
+`../../01_PHASES/PHASE_07_3D_UNIVERSE_UI/PHASE_REPORT.md`; ADR-008; ADR-015.
