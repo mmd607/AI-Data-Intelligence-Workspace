@@ -363,7 +363,7 @@ with no product-specific tradeoff to weigh.
 None beyond the standard Docker/CI maintenance surface.
 
 ## Related
-`../ARCHITECTURE.md` "Infrastructure";
+`../ARCHITECTURE.md` "Deployment Topology";
 `../../01_PHASES/PHASE_01_FOUNDATION/PHASE_PROMPT.md`;
 `../../01_PHASES/PHASE_08_TESTING_DOCKER_DEPLOYMENT/PHASE_PROMPT.md`.
 
@@ -804,3 +804,136 @@ just the code (mirrors the pattern ADR-011 established for profiling thresholds)
 `../ARCHITECTURE.md` "Universe Architecture (Phase 07)"; `../UI_UX_SPEC.md` §4, §9;
 `../../01_PHASES/PHASE_07_3D_UNIVERSE_UI/PHASE_PROMPT.md`;
 `../../01_PHASES/PHASE_07_3D_UNIVERSE_UI/PHASE_REPORT.md`; ADR-008; ADR-015.
+
+---
+
+# ADR-017: Phase 08 Docker/CI Execution — Concrete Choices
+
+**Date:** 2026-09-18
+**Status:** ✅ CONFIRMED
+**Phase:** PHASE_08_FINAL_PRODUCTIZATION_RELEASE
+
+## Context
+ADR-009 pre-committed to "multi-stage Docker images per service, docker-compose for
+orchestration, GitHub Actions for CI, `/health` wired into compose health checks" without
+fixing the concrete implementation. This phase implements it and records the choices ADR-009
+left open.
+
+## Decision
+- **Backend image:** `python:3.12-slim` two-stage build (a `build-essential` builder stage
+  compiles any wheel without a prebuilt binary for the target platform; the runtime stage
+  has no compiler at all), pinned exactly to `backend/requirements.txt`, runs as a
+  non-root `app` user, `HEALTHCHECK` calls `/health` via `urllib` (no extra `curl`
+  dependency installed just for the check).
+- **Frontend image:** `node:20-slim` builds the Vite production bundle; served by
+  `nginxinc/nginx-unprivileged:1.27-alpine` (not plain `nginx:alpine`) specifically so the
+  container runs as non-root without extra `USER`/permission plumbing — it already listens
+  on 8080 unprivileged. `nginx.conf` adds the SPA fallback (`try_files ... /index.html`,
+  required for `react-router-dom` deep links to survive a hard refresh) and long-cache
+  headers for hashed `dist/assets/*` only, never for `index.html` itself.
+- **Compose networking:** the frontend is a static SPA — the *browser*, not the nginx
+  container, calls the backend directly, so there is no container-to-container API proxy.
+  `VITE_API_BASE_URL` is a frontend **build arg** (Vite inlines `VITE_*` vars at build time;
+  there is no runtime env-var injection point in a static bundle), defaulting to
+  `http://localhost:8000` to match the default `BACKEND_PORT`.
+- **Persistence:** a named volume (`backend-data`) mounted at `/app/data`, not a bind mount —
+  uploaded datasets survive `docker compose down`/`up` without depending on host path
+  conventions, consistent with `StorageService`'s existing filesystem-only design (ADR-005).
+- **Root `.env.example`:** documents Compose-level overrides (ports, AI provider pass-
+  through, the frontend build arg) separately from `backend/.env.example` /
+  `frontend/.env.example`, which remain for non-Docker local development.
+- **CI (`​.github/workflows/ci.yml`):** three jobs — `backend` (ruff + pytest),
+  `frontend` (eslint + vitest + `tsc`+build), `docker` (depends on both passing first,
+  then `docker compose up -d --build`, polls the backend's health status, curls both
+  services, always dumps logs and tears down). Replaces a stray, unrelated
+  `python-publish.yml` (a default GitHub-template PyPI-publish workflow, never applicable
+  to this project — dead CI debris removed as part of this phase's cleanup pass).
+- **Known limitation, honestly recorded, not hidden (per this phase's own "No Fake
+  Completeness" rule):** Docker is not installed in the agent's execution environment for
+  this phase, so the images could not be locally build- or runtime-verified here. Every
+  Dockerfile/compose line was manually re-checked for correctness, and the backend was
+  smoke-tested locally under the exact non-reload `uvicorn` invocation the Dockerfile's
+  `CMD` uses (`/health` returned 200). The `docker` CI job above will perform the first
+  actual build+runtime verification, on GitHub Actions' Docker-equipped runners, the first
+  time this branch's CI runs — that CI result, not this document, is the real verification
+  and should be checked before treating Docker support as proven.
+
+## Alternatives Considered
+- **`nginx:alpine` + manual `USER`/chown plumbing** — rejected: `nginx-unprivileged` is a
+  maintained image that solves exactly this with less custom Dockerfile logic.
+- **Bind-mounting `backend/data/uploads` from the host** — rejected: couples the container
+  to a host directory layout for no benefit `docker-compose`'s own named volumes don't
+  already provide.
+- **A reverse-proxy container in front of both services** — rejected as unnecessary
+  complexity for a local-first, single-user tool; would be reconsidered for a real public
+  deployment, which remains explicitly out of scope (`PRODUCT_SPEC.md` "Non-Goals").
+
+## Consequences
+Anyone running `docker compose up --build` gets a working stack with zero required
+configuration, matching the non-Docker local-dev experience's "zero required config"
+principle. Changing the backend's published port requires also updating
+`VITE_API_BASE_URL` (documented inline in `.env.example`), since it is baked in at frontend
+build time, not at container start time — a real constraint of static SPAs, not an
+oversight.
+
+## Related
+`../ARCHITECTURE.md` "Deployment Topology"; ADR-005; ADR-009;
+`../../01_PHASES/PHASE_08_TESTING_DOCKER_DEPLOYMENT/PHASE_PROMPT.md`; `../SECURITY_NOTES.md`.
+
+---
+
+# ADR-018: Dataset-ID Path-Traversal Hardening
+
+**Date:** 2026-09-18
+**Status:** ✅ CONFIRMED
+**Phase:** PHASE_08_FINAL_PRODUCTIZATION_RELEASE
+
+## Context
+`app/ingestion/storage.py`'s own docstring (Phase 02) claimed path traversal was
+structurally impossible because `dataset_id` is "always server-generated, never derived
+from client input." That claim was only true for the *write* path (`POST /datasets`,
+which does generate the id server-side via `uuid4()`). Every *read* path
+(`GET /datasets/{dataset_id}`, and every profiling/ML/AI endpoint nested under
+`/datasets/{dataset_id}/...`) takes `dataset_id` straight from the URL — client-controlled
+— and joined it directly onto `base_dir` with no format check. `pathlib` does not collapse
+`..` segments itself, but the OS resolves them at the syscall level
+(`Path.exists()`/`open()`), so a `dataset_id` such as `..\\some-other-dir` (backslash is
+not a URL path separator, so it reaches the `{dataset_id}` route parameter unmodified,
+unlike a literal `/`) is a real path-traversal primitive, not a theoretical one — confirmed
+empirically with `fastapi.testclient.TestClient` against a real target directory placed
+just outside the isolated test storage root before the fix, and disproven the same way
+after it.
+
+## Decision
+`StorageService._dataset_dir` now rejects any `dataset_id` containing anything other than
+letters, digits, hyphens, or underscores — every real id (`str(uuid4())`) always matches;
+`/`, `\`, and `.` (so also `..`) never do — and returns `None` before any filesystem call is
+made, which every existing caller (`read_metadata`, `get_raw_file_path`) already treated as
+"dataset not found," so no call site changed and the public 404 contract is unchanged. A
+character allowlist was chosen over a strict UUID4-shape regex specifically so it doesn't
+also break `StorageService`'s own existing unit tests, which legitimately construct
+`StorageService` directly with simple test ids like `"ds1"` (bypassing the API layer
+entirely) — the allowlist still makes traversal structurally impossible while not
+over-constraining what counts as a valid id at the storage layer. Regression tests added in
+`tests/test_datasets_api.py::TestDatasetIdTraversal` (HTTP-level, via the real route) and
+directly against `StorageService` (unit-level).
+
+## Alternatives Considered
+- **Validate at the router layer instead of `StorageService`** — rejected: would need
+  duplicating the same check in `datasets.py`, `profile.py`, `ml.py`, and `ai.py`
+  independently, and any future endpoint taking `dataset_id` would silently lack the
+  guard unless someone remembered to add it. Fixing it once in the single function every
+  one of them already funnels through is structural, not a convention someone can forget.
+- **Strict UUID4 regex** — rejected after it broke 4 existing loader unit tests that use
+  non-UUID test ids; the character-allowlist approach blocks the same attack surface
+  (no separators, no dots, ever) without that collateral damage.
+
+## Consequences
+None for legitimate use — every id the application itself ever generates already matches
+the allowlist. Any future code that calls `StorageService` with a non-conforming id will now
+get a `None` (read paths) or a raised `ValueError` (write paths, which should never receive
+a non-server-generated id in the first place) instead of silently succeeding.
+
+## Related
+`../SECURITY_NOTES.md`; `app/ingestion/storage.py`;
+`tests/test_datasets_api.py::TestDatasetIdTraversal`.

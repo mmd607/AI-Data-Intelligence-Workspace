@@ -41,7 +41,7 @@ function UploadDropzone({ onFileChosen }: { onFileChosen: (file: File) => void }
       }`}
     >
       <p className="text-sm font-medium text-slate-200">Drop a CSV file here, or click to browse</p>
-      <p className="text-xs text-slate-500">Only .csv files are supported in this phase.</p>
+      <p className="text-xs text-slate-500">Only .csv files are currently supported.</p>
       <input
         ref={inputRef}
         type="file"
@@ -109,7 +109,7 @@ export function UploadPage() {
   async function handleFile(file: File) {
     setValidationError(null);
     if (!file.name.toLowerCase().endsWith(".csv")) {
-      setValidationError(`Unsupported file type. Only .csv is supported in this phase.`);
+      setValidationError(`Unsupported file type. Only .csv files are currently supported.`);
       return;
     }
     const metadata = await upload.run(file);

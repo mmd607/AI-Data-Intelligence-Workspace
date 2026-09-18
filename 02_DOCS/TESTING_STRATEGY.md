@@ -46,6 +46,15 @@ this document is the shared methodology and tooling behind it.
   The goal throughout is 100% coverage of the important logic paths, not meaningless
   coverage inflation — see each phase's own report for what was deliberately left
   uncovered and why.
+  - **Phase 08 — full backend suite:** **346 tests, 99% overall line coverage**
+    (`pytest -q --cov=app --cov-report=term-missing`, measured against the project's own
+    pinned `.venv`, not an ambient/global interpreter — see `SECURITY_NOTES.md` §2.7 for
+    why that distinction matters). `app/ingestion/storage.py` reached **100%** as part of
+    this phase's dataset-id path-traversal fix (ADR-018) — every branch of the new
+    validation, including the write-path defensive `ValueError`, is exercised by a real
+    test, not left as an assumed-safe path. The remaining ~1% of uncovered lines across
+    the suite are pre-existing, individually-reviewed defensive branches (e.g. an
+    unreachable `else` in a Pydantic-enum-guarded match), not newly introduced this phase.
 - Fixture datasets (small, synthetic, engineered to have known properties — known null
   counts, known duplicates, known distributions) live under a test-fixtures directory
   (🟡 ASSUMED path: `backend/tests/fixtures/`), are checked into git (they contain no
@@ -195,11 +204,26 @@ and Phase 07's `FeaturePanel.test.tsx`/`AIInsightPanel.test.tsx`).
 
 ## 8. CI Integration
 
-🟡 ASSUMED split (finalized Phase 08, "Testing, Docker & Deployment"):
-- **On every push/PR:** lint, unit tests, integration tests, build — fast enough to run on
-  every change.
-- **Manual/pre-release (Phase 08 release checklist):** full end-to-end suite, performance
-  checks — slower, not required on every commit.
+✅ CONFIRMED (Phase 08) — `.github/workflows/ci.yml`, three jobs on every push/PR:
+- **`backend`** — `ruff check .` then `pytest -q` against `backend/requirements-dev.txt`
+  (the exact pinned dependency set the application ships with, not whatever happens to be
+  on the runner).
+- **`frontend`** — `npm run lint` (ESLint, `--max-warnings 0`), `npm run test -- --run`
+  (Vitest), `npm run build` (`tsc --noEmit` then `vite build`).
+- **`docker`** (depends on both jobs above passing) — `docker compose up -d --build`,
+  polls the backend's container health status until `healthy`, curls both published ports,
+  always dumps `docker compose logs` and tears the stack down. This is the actual
+  build+runtime verification for Docker (§30/§32 of the Phase 08 prompt) — see
+  `SECURITY_NOTES.md` §4 for why it could not also be run locally in the agent's
+  environment this phase.
+- Replaced a stray, unrelated `python-publish.yml` (a default GitHub-template PyPI-publish
+  workflow that had nothing to do with this project) found during this phase's cleanup
+  pass — dead CI debris, not a regression of anything working.
+- Manual/pre-release (full end-to-end browser verification, performance spot-checks)
+  remains a human/agent-driven pass through the app, not automated in CI — consistent with
+  §1's "Visual/manual QA" tier and Phase 06/07's own precedent of verifying the real
+  upload→ML→AI→Universe flow against real running dev servers rather than a scripted
+  browser suite.
 
 ## 9. Relationship to Phase Prompts
 

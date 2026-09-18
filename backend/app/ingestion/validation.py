@@ -46,8 +46,8 @@ def validate_extension(sanitized_filename: str) -> None:
         raise IngestionError(
             code="unsupported_file_type",
             message=(
-                f"Unsupported file type '{suffix or 'unknown'}'. Only .csv is supported "
-                "in this phase."
+                f"Unsupported file type '{suffix or 'unknown'}'. Only .csv files are "
+                "currently supported."
             ),
             status_code=400,
         )

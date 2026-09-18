@@ -1,24 +1,21 @@
 # PROJECT STATE
 
-Status: COMPLETE (Phase 07)
+Status: COMPLETE (Phase 08 — final planned phase)
 
-Current phase: PHASE_08_TESTING_DOCKER_DEPLOYMENT
+Current phase: PHASE_08_TESTING_DOCKER_DEPLOYMENT (executed under branch name
+`phase/08-final-productization-release`, per explicit human instruction — see that phase's
+own `PHASE_REPORT.md` header for why the branch name differs from `PHASE_PROMPT.md`)
 
-Last completed phase: PHASE_07_3D_UNIVERSE_UI
+Last completed phase: PHASE_08_TESTING_DOCKER_DEPLOYMENT
 
-Current branch: phase/07-3d-data-intelligence-universe (branched from `origin/main` at
-`c7642e6`, the human-merged baseline that already includes Phase 06's full 2D frontend
-integration — `main` remains exclusively human-controlled; Phase 08 must branch fresh only
-after explicit human direction on the baseline to use)
+Current branch: phase/08-final-productization-release (branched from
+phase/07-3d-data-intelligence-universe, clean working tree at branch time)
 
 Next action:
-STOP. Phase 07 is complete, committed, and pushed to
-`origin/phase/07-3d-data-intelligence-universe`. Do not start Phase 08 automatically — wait
-for explicit human approval, then read
-`01_PHASES/PHASE_08_TESTING_DOCKER_DEPLOYMENT/PHASE_PROMPT.md` and follow the same lifecycle
-(DISCOVER → PLAN → IMPLEMENT → TEST → REVIEW → DOCUMENT → UPDATE STATE → COMMIT → PUSH →
-VERIFY → STOP) on a fresh branch per `GIT_WORKFLOW.md`. `main` is never touched, never
-committed to, never merged into, by the agent.
+STOP. This was the final phase in `AGENT_MASTER_INSTRUCTIONS.md`'s phase order. No Phase 09
+is planned or should be started. The human decides if/when to merge
+`phase/08-final-productization-release` into `main` and whether to cut a release tag
+(`GIT_WORKFLOW.md` "Tagging"). Full detail: `01_PHASES/PHASE_08_TESTING_DOCKER_DEPLOYMENT/PHASE_REPORT.md`.
 
 ## Phase status
 
@@ -29,7 +26,7 @@ committed to, never merged into, by the agent.
 - [x] PHASE 05 — AI Analytics
 - [x] PHASE 06 — API + Frontend Integration
 - [x] PHASE 07 — 3D Universe UI
-- [ ] PHASE 08 — Testing + Docker + Deployment
+- [x] PHASE 08 — Testing + Docker + Deployment
 
 ## Agent log
 
@@ -171,3 +168,28 @@ Do not mark a phase complete unless its Definition of Done is satisfied.
   touched. No Phase 08 work performed. No binary screenshots committed (documented
   limitation — see `02_DOCS/screenshots/README.md`). Full detail in
   `01_PHASES/PHASE_07_3D_UNIVERSE_UI/PHASE_REPORT.md`.
+- 2026-09-18 — PHASE 08 — COMPLETE — phase/08-final-productization-release — full
+  engineering/product/security audit of Phases 01–07 plus final Docker/CI hardening (branch
+  name per explicit human instruction this session, superseding
+  `PHASE_PROMPT.md`'s originally planned `phase/08-testing-docker-deployment`). A real
+  dataset-id path-traversal gap was found and fixed in `app/ingestion/storage.py`
+  (confirmed exploitable, then disproven, via `TestClient` — ADR-018); a live end-to-end
+  browser walkthrough (upload → profile → quality → analytics → 2 real ML training runs →
+  grounded AI explanation + real Q&A → 3D Universe with a confirmed real WebGL canvas → 2D
+  fallback with confirmed data parity → dataset-not-found error path) found and fixed one
+  real product-polish bug: internal "in this phase" development-process language had
+  leaked into 5 user-facing strings (upload page copy, an ML unavailable-metric reason, an
+  ML limitations entry), reworded to ordinary product language. Full Docker setup added
+  (multi-stage backend/frontend images, non-root, `docker-compose.yml`, health checks) —
+  honestly documented as **not locally build/runtime-verified** in the agent's own
+  environment (no Docker installed there); a new `docker` job in
+  `.github/workflows/ci.yml` performs the real build+runtime verification on every push
+  instead (ADR-017). A stray, unrelated `python-publish.yml` GitHub-template workflow was
+  removed as dead debris. 346/346 backend tests passing (up from 342; 4 new path-traversal
+  regression tests), 99% overall backend coverage (100% on the file the security fix
+  touched); 131/131 frontend tests passing (unchanged, zero regression); `ruff`/`eslint`/
+  `tsc`/`vite build` all clean. `02_DOCS/SECURITY_NOTES.md` and `02_DOCS/DEPLOYMENT.md`
+  created; `TESTING_STRATEGY.md`/`decisions/DECISIONS_LOG.md` (ADR-017, ADR-018)/`README.md`
+  updated. No new product features added (out of scope). This is the final planned phase —
+  no Phase 09. Full detail, including the exact commit hash for this work (see `git log`
+  on this branch), in `01_PHASES/PHASE_08_TESTING_DOCKER_DEPLOYMENT/PHASE_REPORT.md`.

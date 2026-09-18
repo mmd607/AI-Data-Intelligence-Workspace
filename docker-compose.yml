@@ -1,0 +1,55 @@
+# Production-oriented local stack: `docker compose up --build` from the repo root.
+#
+# The frontend is a static SPA served by nginx and talks to the backend directly from
+# the browser (no server-side proxying between the two containers), so only the backend
+# needs to be reachable from the host at a stable, known port — see `.env.example`.
+
+services:
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    environment:
+      APP_APP_ENV: production
+      APP_LOG_LEVEL: ${APP_LOG_LEVEL:-INFO}
+      APP_CORS_ORIGINS: ${APP_CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080}
+      APP_DATA_DIR: data/uploads
+      APP_MAX_UPLOAD_SIZE_BYTES: ${APP_MAX_UPLOAD_SIZE_BYTES:-52428800}
+      APP_AI_PROVIDER: ${APP_AI_PROVIDER:-offline}
+      APP_AI_MODEL: ${APP_AI_MODEL:-}
+      APP_AI_API_KEY: ${APP_AI_API_KEY:-}
+      APP_AI_BASE_URL: ${APP_AI_BASE_URL:-https://api.anthropic.com}
+      APP_AI_TIMEOUT_SECONDS: ${APP_AI_TIMEOUT_SECONDS:-30}
+    volumes:
+      # Named volume, not a bind mount: uploaded datasets persist across
+      # `docker compose down`/`up` without depending on host filesystem layout.
+      - backend-data:/app/data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).status == 200 else 1)",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
+    ports:
+      - "${FRONTEND_PORT:-8080}:8080"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  backend-data:

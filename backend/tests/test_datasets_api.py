@@ -5,6 +5,7 @@ upload → list → get flow, plus error handling, per
 
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.config import Settings, get_settings
@@ -135,3 +136,66 @@ class TestPathTraversalFilename:
         dataset_dir = storage_dir / body["id"]
         assert (dataset_dir / "original.csv").exists()
         assert list(storage_dir.iterdir()) == [dataset_dir]
+
+
+class TestDatasetIdTraversal:
+    """`dataset_id` is a client-controlled URL path parameter, unlike the upload filename
+    above — it must be just as hard to weaponize into a path-traversal read.
+    """
+
+    def test_traversal_dataset_id_cannot_read_a_file_outside_storage_dir(
+        self, client: TestClient, storage_dir: Path
+    ) -> None:
+        # A real target file that exists just outside storage_dir, shaped exactly like a
+        # legitimate dataset directory so a successful traversal would return 200.
+        secret_dir = storage_dir.parent / "secret"
+        secret_dir.mkdir(parents=True, exist_ok=True)
+        (secret_dir / "metadata.json").write_text('{"id": "leaked", "secret": true}')
+
+        # Forward-slash traversal (e.g. "../secret") is normalized away by HTTP clients
+        # before the request is even sent, so it never reaches this parameter over the
+        # wire — the backslash form isn't a URL separator, so it reaches `dataset_id`
+        # unchanged and must be rejected on the server side instead.
+        for malicious_id in ("..\\secret", "..%5csecret", "....\\\\secret"):
+            response = client.get(f"/api/v1/datasets/{malicious_id}")
+            assert response.status_code == 404, malicious_id
+            assert response.json()["error"]["code"] == "dataset_not_found"
+
+    def test_traversal_dataset_id_never_reaches_the_filesystem(
+        self, storage_dir: Path
+    ) -> None:
+        from app.ingestion.storage import StorageService
+
+        storage = StorageService(base_dir=storage_dir)
+        secret_dir = storage_dir.parent / "secret"
+        secret_dir.mkdir(parents=True, exist_ok=True)
+        (secret_dir / "metadata.json").write_text('{"id": "leaked"}')
+        (secret_dir / "original.csv").write_text("a,b\n1,2\n")
+
+        assert storage.read_metadata("..\\secret") is None
+        assert storage.read_metadata("../secret") is None
+        assert storage.get_raw_file_path("..\\secret") is None
+        assert storage.get_raw_file_path("../secret") is None
+
+    def test_write_paths_reject_a_non_conforming_id_too(self, storage_dir: Path) -> None:
+        """Write paths only ever receive server-generated ids in practice, but should
+        never silently accept anything else if that invariant is ever broken."""
+        from app.ingestion.storage import StorageService
+
+        storage = StorageService(base_dir=storage_dir)
+
+        with pytest.raises(ValueError, match="dataset_id must contain only"):
+            storage.save_raw_file("../escape", b"a,b\n1,2\n")
+
+        with pytest.raises(ValueError, match="dataset_id must contain only"):
+            storage.write_metadata("../escape", {"id": "escape"})
+
+    def test_list_metadata_on_a_missing_base_dir_returns_empty(self, tmp_path: Path) -> None:
+        from app.ingestion.storage import StorageService
+
+        storage = StorageService(base_dir=tmp_path / "created")
+        # Simulate the directory having been removed out-of-band after construction.
+        import shutil
+
+        shutil.rmtree(storage.base_dir)
+        assert storage.list_metadata() == []
