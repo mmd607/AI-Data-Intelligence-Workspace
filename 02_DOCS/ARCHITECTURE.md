@@ -507,6 +507,12 @@ form of product principles 2 and 3.
   placeholder values.
 - Upload validation must guard against path traversal, oversized files, and MIME/type
   spoofing — concrete checks specified and tested in Phase 02, hardened further in Phase 08.
+- ✅ CONFIRMED (Phase 08) — the upload-filename path-traversal guard from Phase 02 covered
+  only the filename; the *dataset id* read path (`GET /datasets/{id}` and everything nested
+  under it) did not have an equivalent guard until this phase — see `SECURITY_NOTES.md` §2.1
+  and `decisions/DECISIONS_LOG.md` ADR-018 for the finding, the fix, and why a character
+  allowlist was chosen over a stricter UUID4 regex. Full security review (findings, fixes,
+  and honestly-recorded limitations): `SECURITY_NOTES.md`.
 
 ## Performance & Scalability Notes
 
@@ -521,8 +527,19 @@ form of product principles 2 and 3.
 
 - **Dev:** `vite` dev server (frontend) + `uvicorn --reload` (backend), run directly on the
   host — no Docker required for day-to-day development.
-- **Prod-like/local release:** `docker compose up` runs both services together with health
-  checks (Phase 08).
+- **Prod-like/local release:** ✅ CONFIRMED (Phase 08) — `docker compose up --build` runs
+  both services together: a non-root, multi-stage `python:3.12-slim` backend image
+  (dependencies installed only from the pinned `requirements.txt`, eliminating the class of
+  dependency-drift bug this phase's own baseline run surfaced — see `SECURITY_NOTES.md`
+  §2.7) and a non-root, multi-stage `node:20-slim` → `nginx-unprivileged` frontend image, a
+  named volume for upload persistence, and Docker `HEALTHCHECK`s on both, with the frontend
+  gated on the backend's health status. Concrete choices and alternatives considered:
+  `decisions/DECISIONS_LOG.md` ADR-017. **Verification status:** manually reviewed line by
+  line and backend-smoke-tested locally under the exact `uvicorn` invocation the image's
+  `CMD` uses, but not build/runtime-verified with actual Docker in the agent's environment
+  (not installed there) — `.github/workflows/ci.yml`'s `docker` job performs that
+  verification for real on every push; see `02_DOCS/DEPLOYMENT.md` §8 before treating the
+  containerized path as proven end-to-end.
 - Public cloud hosting is explicitly out of scope for v1 — the Docker setup is
   deployment-ready but no specific host is chosen.
 

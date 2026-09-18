@@ -161,7 +161,7 @@ class ModelResult(BaseModel):
     metrics: dict[str, float]
     unavailable_metrics: dict[str, str]
     """Metric name -> reason it could not be computed — never silently absent with no
-    explanation (e.g. `{"roc_auc": "not computed for multiclass baseline in this phase"}`).
+    explanation (e.g. `{"roc_auc": "not computed for multiclass baseline models"}`).
     """
     confusion_matrix: ConfusionMatrixResult | None
     warnings: list[str]

@@ -51,7 +51,7 @@ def evaluate_classification(
         else:
             unavailable["roc_auc"] = "Predicted probabilities were not available for this model."
     else:
-        unavailable["roc_auc"] = "Not computed for multiclass baselines in this phase."
+        unavailable["roc_auc"] = "Not computed for multiclass baseline models."
 
     return metrics, unavailable, confusion
 

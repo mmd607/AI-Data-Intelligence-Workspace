@@ -115,7 +115,7 @@ def train_single_model(
 
     limitations = [
         "Baseline model only — no hyperparameter tuning was performed.",
-        "Free-text and datetime columns are excluded from features in this phase.",
+        "Free-text and datetime columns are excluded from features.",
     ]
     warnings = list(prepared.warnings)
 
