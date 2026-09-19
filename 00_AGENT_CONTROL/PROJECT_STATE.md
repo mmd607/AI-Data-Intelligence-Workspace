@@ -193,3 +193,21 @@ Do not mark a phase complete unless its Definition of Done is satisfied.
   updated. No new product features added (out of scope). This is the final planned phase —
   no Phase 09. Full detail, including the exact commit hash for this work (see `git log`
   on this branch), in `01_PHASES/PHASE_08_TESTING_DOCKER_DEPLOYMENT/PHASE_REPORT.md`.
+- 2026-09-19 — PHASE 08 ADDENDUM — COMPLETE — phase/08-final-productization-release — a
+  follow-up human instruction requested a dedicated desktop-first polish pass. Found and
+  fixed a real desktop-scaling gap: `WorkspaceLayout.tsx` capped every workspace page,
+  including the 3D Universe, at a fixed `max-w-5xl` (1024px) regardless of monitor size —
+  confirmed live at 1440p/4K, not just from reading code. Fixed: the Universe route now has
+  no content max-width (scales continuously with viewport, bounded only by padding); 2D
+  content pages got a wider but still-capped reading width; `AnalyticsPage`'s distribution
+  grid gained a 3-column breakpoint; one global `focus-visible` style was added (no
+  interactive element anywhere had an explicit focus style before). Verified live by
+  resizing a real browser through 1280×720 → 3840×2160 (no horizontal overflow at any
+  size) and by exercising real 3D mouse/keyboard interaction (orbit, zoom, click-to-select
+  via a confirmed real raycast hit, hover, Escape, Reset View, search-to-focus) both before
+  and after the change. Duplicate network requests observed during testing were investigated
+  and confirmed to be `React.StrictMode`'s standard dev-only double-invocation, not a bug —
+  documented, not "fixed." 131/131 frontend tests still passing, lint/typecheck/build clean;
+  no backend changes. Cross-browser testing (Firefox/Safari/Edge) was not performed and is
+  honestly recorded as untested, not claimed. ADR-019 added. Full detail in the "Addendum"
+  section of `01_PHASES/PHASE_08_TESTING_DOCKER_DEPLOYMENT/PHASE_REPORT.md`.

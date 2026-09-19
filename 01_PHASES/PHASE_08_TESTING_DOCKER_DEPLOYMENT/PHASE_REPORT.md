@@ -140,3 +140,49 @@ Remote branch: `origin/phase/08-final-productization-release` (pushed after this
 None planned. This is the final phase in `00_AGENT_CONTROL/AGENT_MASTER_INSTRUCTIONS.md`'s
 phase order. The human decides if/when to merge this branch into `main` and whether to cut
 a release tag (`00_AGENT_CONTROL/GIT_WORKFLOW.md` "Tagging").
+
+---
+
+## Addendum (2026-09-19) — Desktop-First Polish Pass
+
+A follow-up human instruction on this same branch asked for a dedicated desktop-quality
+pass (Windows/macOS/Linux desktop, 1080p/1440p/4K, mouse/keyboard, browser compatibility).
+Performed live against real dev servers in a real browser, not just by reading code.
+
+**Found and fixed:** `WorkspaceLayout.tsx` capped every workspace page, including the 3D
+Universe, at a fixed `max-w-5xl` (1024px) regardless of monitor size — on a 1440p/4K
+display the flagship 3D visualization was no larger than on a 1280px laptop. Fixed by
+removing the Universe route's content max-width entirely (scales continuously with the
+viewport, bounded only by responsive padding) while giving the text/table 2D pages a wider
+but still-capped reading width (`max-w-6xl` → `max-w-[1400px]` at `2xl`). Also widened
+`AnalyticsPage`'s distribution grid to 3 columns at `xl`, and added one global
+`focus-visible` rule in `index.css` — no interactive element anywhere had an explicit focus
+style before this. Full rationale and alternatives considered: `decisions/DECISIONS_LOG.md`
+ADR-019; UX-facing detail: `UI_UX_SPEC.md` §5–6.
+
+**Verified live, not just read from code:** resized a real browser through 1280×720,
+1366×768, 1440×900, 1920×1080, 2560×1440, and 3840×2160 on the Universe and 2D pages — no
+horizontal overflow at any size (`scrollWidth`/`clientWidth` checked explicitly at 4K); 3D
+mouse/keyboard interactions (orbit-drag, scroll-zoom, click-to-select via a real raycast hit
+confirmed against the dataset-core mesh, hover cursor change, Escape-to-close, "Reset View,"
+search-to-focus with real computed feature stats displayed) all confirmed working, before
+and after the layout change; keyboard `Tab` order and the new focus ring confirmed visible
+on real elements (the workspace back-link/tab-bar and the Universe HUD's "Reset View"
+button).
+
+**Investigated, confirmed not a bug:** duplicate `GET` requests observed in the network
+panel (each dataset endpoint fetched twice on page load) are `React.StrictMode`'s standard,
+dev-only intentional double-invocation of effects (`main.tsx`) — a known, harmless React 18
+diagnostic behavior, not a production duplicate-request bug; not "fixed" because there is
+nothing to fix. A one-time `THREE.WebGLRenderer: Context Lost` console message coincided
+with several rapid viewport resizes in immediate succession during this test pass itself
+(not something a real user does) and did not recur under normal use.
+
+**Tests/checks after this pass:** frontend — 131/131 tests passing (unchanged), `eslint`
+clean, `tsc --noEmit && vite build` clean. No backend changes in this addendum.
+
+**Honest limitation:** cross-browser verification (Chrome/Edge/Firefox/Safari) was not
+performed — only the one Chromium-based automated browser available in this environment was
+tested. No claim is made about Firefox/Safari/Edge-specific behavior; the CSS/layout used
+(Tailwind utilities, standard flex/grid, no vendor-prefixed or bleeding-edge features) is
+broadly compatible, but that is a reasonable expectation, not a verified fact.

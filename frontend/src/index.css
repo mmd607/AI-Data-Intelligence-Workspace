@@ -12,6 +12,32 @@ body {
   @apply bg-surface font-sans text-slate-200 antialiased;
 }
 
+/* A consistent, on-brand keyboard-focus indicator app-wide. Nothing suppressed the
+   browser default before this (no `outline-none` anywhere), but an unstyled default
+   outline reads as an oversight against this app's otherwise deliberate dark palette —
+   this replaces it with one, everywhere, rather than leaving it to each component. */
+@layer base {
+  a,
+  button,
+  input,
+  select,
+  textarea,
+  [role="button"],
+  [tabindex]:not([tabindex="-1"]) {
+    @apply outline-none;
+  }
+
+  a:focus-visible,
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  [role="button"]:focus-visible,
+  [tabindex]:not([tabindex="-1"]):focus-visible {
+    @apply rounded-md ring-2 ring-accent ring-offset-2 ring-offset-surface;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
