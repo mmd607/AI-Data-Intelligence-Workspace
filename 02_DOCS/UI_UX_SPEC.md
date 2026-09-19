@@ -226,6 +226,13 @@ low-performance devices":
   access*, only for the spatial metaphor.
 - ✅ CONFIRMED — text contrast in all 2D UI (sidebar, panels, top bar) meets WCAG AA at
   minimum, independent of the 3D scene's own aesthetic treatment.
+- ✅ CONFIRMED (Phase 08 desktop pass) — a consistent, on-brand keyboard-focus indicator
+  (`index.css`, `@layer base`) now applies to every link/button/input/select/textarea/
+  `role="button"` app-wide. Before this, nothing suppressed the browser's own default
+  outline, but nothing styled it either — verified live via real `Tab` key presses (not
+  just code reading) that focus now visibly, consistently lands on the correct element in
+  document order (back-link → tab bar → page content) on the Overview page, and on Universe
+  HUD controls (Reset View confirmed showing the new ring).
 
 ## 6. Responsive Behavior
 
@@ -237,6 +244,36 @@ not a lock: a visible "Try 3D Universe" control (`features/universe/UniversePage
 switches into the 3D scene on demand whenever WebGL is actually available, and the choice
 is only re-applied once per page load (a later resize/rotation never silently overrides an
 explicit user choice).
+
+✅ CONFIRMED (Phase 08 desktop pass) — "desktop is the primary target" was true in intent
+since Phase 01 but not backed by a desktop-scaling layout until this pass: `WorkspaceLayout`
+capped **every** workspace page (including the Universe) at a fixed `max-w-5xl` (1024px)
+regardless of monitor size, so a 1440p or 4K display showed the exact same content width as
+a 1280px laptop, with the difference spent entirely as unused side margin. Verified live
+(real dev servers, real browser, resized through 1280×720, 1366×768, 1440×900, 1920×1080,
+2560×1440, and 3840×2160) and fixed:
+
+- The **Universe** (a spatial/canvas workspace, not a reading column) now has no content
+  max-width at all — it scales continuously with the viewport, bounded only by padding
+  (`px-6 md:px-10 2xl:px-16`). A fixed 1800px cap was tried first and rejected: it still
+  looked small and margin-heavy at 2560px/4K in the live check, which is exactly the
+  "excessive empty space on large displays" failure mode this pass exists to catch.
+- The **2D content pages** (Overview/Quality/Analytics/ML/AI) keep a comfortable, capped
+  reading width — `max-w-6xl` (1152px), `max-w-[1400px]` from the `2xl` breakpoint up — a
+  deliberate readability choice (a data-quality findings list or an AI narrative paragraph
+  gets harder to read, not more useful, stretched edge-to-edge on an ultrawide monitor), not
+  an oversight left over from the old fixed cap.
+- `AnalyticsPage`'s distribution grid gained an `xl:grid-cols-3` breakpoint (was capped at
+  2 columns regardless of available width) so more histograms are visible at once on a wide
+  display without individually stretching each one too wide to read.
+- Confirmed via `document.documentElement.scrollWidth`/`clientWidth` at 3840×2160: no
+  horizontal overflow at any tested size.
+- 3D mouse/keyboard interaction was verified live at 1920×1080, not just read from code:
+  orbit (drag), zoom (scroll), click-to-select (a real raycast hit on the dataset-core mesh,
+  confirmed via its DOM-projected `NodeLabel`'s screen position), hover cursor change,
+  Escape-to-close, "Reset View," and search-to-focus (typing a column name, selecting it,
+  camera moves to it and opens its real computed feature stats) — all confirmed working
+  correctly, not merely present in the DOM.
 
 ## 7. Component Inventory (2D chrome)
 

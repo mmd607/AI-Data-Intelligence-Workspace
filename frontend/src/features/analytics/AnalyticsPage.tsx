@@ -24,7 +24,7 @@ function DistributionsSection() {
         />
       )}
       {distribution.status === "success" && distribution.data.columns.length > 0 && (
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
           {distribution.data.columns.map((col) => (
             <div key={col.column} className="flex flex-col gap-2">
               <p className="font-mono text-sm text-slate-300">{col.column}</p>

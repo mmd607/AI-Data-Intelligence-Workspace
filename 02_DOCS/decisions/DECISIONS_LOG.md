@@ -937,3 +937,54 @@ a non-server-generated id in the first place) instead of silently succeeding.
 ## Related
 `../SECURITY_NOTES.md`; `app/ingestion/storage.py`;
 `tests/test_datasets_api.py::TestDatasetIdTraversal`.
+
+---
+
+# ADR-019: Desktop-Scaling Layout & App-Wide Focus States
+
+**Date:** 2026-09-19
+**Status:** ✅ CONFIRMED
+**Phase:** PHASE_08_FINAL_PRODUCTIZATION_RELEASE (desktop-focused follow-up pass)
+
+## Context
+`UI_UX_SPEC.md` §6 said "desktop is the primary target" since Phase 01, but
+`WorkspaceLayout.tsx` capped every workspace page — including the 3D Universe — at a fixed
+`max-w-5xl` (1024px) regardless of monitor size. Verified live by resizing a real browser
+through 1280×720 up to 3840×2160: on a 1440p/4K display the Universe (the product's flagship
+visualization) rendered no larger than on a 1280px laptop, with the difference spent
+entirely as dead side margin — the exact "excessive empty space on large displays" failure
+mode. Separately, no interactive element anywhere in the app had an explicit focus style;
+nothing suppressed the browser default, but nothing styled it either, which is inconsistent
+with the app's otherwise deliberate dark visual system.
+
+## Decision
+- **Universe route:** no content max-width — `max-w-none` with responsive padding
+  (`px-6 md:px-10 2xl:px-16`), so the canvas scales continuously with the viewport. A fixed
+  1800px cap was tried first and rejected after the live 2560px/4K check showed it was still
+  too conservative.
+- **All other workspace routes:** kept a capped reading width, but wider than before —
+  `max-w-6xl` (1152px), `max-w-[1400px]` from `2xl` up — a deliberate readability choice for
+  text/list/table content, not the same treatment as the canvas.
+- `AnalyticsPage`'s distribution grid gained `xl:grid-cols-3` (was fixed at 2 columns) to use
+  extra width for more visible histograms rather than just whitespace.
+- Added one global `@layer base` rule in `index.css` giving every interactive element a
+  consistent `focus-visible` ring in the existing `accent` token, rather than touching every
+  individual button/link's className across the codebase.
+
+## Alternatives Considered
+- **A single wider fixed cap for all pages (including Universe)** — rejected: a fixed pixel
+  number that looks right at 1920px either wastes space at 4K or (if sized for 4K) looks
+  arbitrary/too-wide at 1366px; a canvas has no comparable readability ceiling a text column
+  has, so removing the cap entirely for that one route is the more correct fix, not a
+  compromise.
+- **Per-component focus styles instead of a global rule** — rejected as needless repetition
+  across dozens of buttons/links with no behavioral difference from one shared rule.
+
+## Consequences
+None negative found; verified with the full frontend suite (131/131 tests, lint, typecheck,
+build all clean) and a live interaction pass (orbit/zoom/click-to-select/hover/Escape/Reset
+View/search-to-focus all confirmed working at 1920×1080 after the change).
+
+## Related
+`../UI_UX_SPEC.md` §5, §6; `frontend/src/features/workspace/WorkspaceLayout.tsx`;
+`frontend/src/index.css`; `frontend/src/features/analytics/AnalyticsPage.tsx`.
